@@ -94,15 +94,11 @@ def wrapping_add(a, b):
 
 
 def wrapping_mul_python(a, b):
-    a = numba.uint64(a)
-    b = numba.uint64(b)
     with np.errstate(all="ignore"):
         return a * b
 
 
 def wrapping_add_python(a, b):
-    a = numba.uint64(a)
-    b = numba.uint64(b)
     with np.errstate(all="ignore"):
         return a + b
 

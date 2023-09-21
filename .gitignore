@@ -38,5 +38,5 @@ tmp_*
 .pytest_cache
 pytestdebug.log
 
-# Profiler
+# profiler
 *.prof

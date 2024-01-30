@@ -113,6 +113,7 @@ mcdc.tally(
 #   Run in batches (at least 2) to avoid tally bottleneck
 #   Need active bank buffer due to significant fission production
 mcdc.setting(N_particle=10, N_batch=10, active_bank_buff=10000)
+mcdc.implicit_capture()
 
 # Run
 mcdc.run()

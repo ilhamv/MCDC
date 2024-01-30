@@ -33,6 +33,8 @@ def run_job(N_node, N_particle, tag):
 task = {
     "c5g7_tdx": [1e4, 1e5, 1e6, 1e7],
     "kobayashi_g7": [1e4, 1e5, 1e6, 1e7],
+    "c5g7_tdx-branchless_collision": [1e4, 1e5, 1e6, 1e7],
+    "kobayashi_g7-implicit_capture": [1e4, 1e5, 1e6, 1e7],
 }
 
 for tag in task.keys():

@@ -8,7 +8,7 @@ import mcdc.type_ as type_
 
 from mcdc.constant import *
 from mcdc.print_ import print_error, print_msg
-from mcdc.type_ import score_list, iqmc_score_list
+from mcdc.type_ import iqmc_score_list
 from mcdc.loop import loop_source
 import mcdc.adapt as adapt
 from mcdc.adapt import toggle, for_cpu, for_gpu
@@ -1818,14 +1818,6 @@ def surface_bc(P, surface, trans):
 
 
 @njit
-def surface_exit_evaluate(P):
-    if P["surface_ID"] == 0:
-        return 0
-    else:
-        return 1
-
-
-@njit
 def surface_reflect(P, surface, trans):
     ux = P["ux"]
     uy = P["uy"]
@@ -2082,11 +2074,11 @@ def mesh_get_angular_index(P, mesh):
 
 
 @njit
-def mesh_get_energy_index(P, mesh, mcdc):
+def mesh_get_energy_index(P, mesh, mode_MG):
     # Check if outside grid
     outside = False
 
-    if mcdc["setting"]["mode_MG"]:
+    if mode_MG:
         return binary_search(P["g"], mesh["g"]), outside
     else:
         E = P["E"]
@@ -2139,116 +2131,74 @@ def mesh_crossing_evaluate(P, mesh):
 
 
 @njit
-def score_tracklength(P, distance, mcdc):
-    tally = mcdc["tally"]
+def score_tracklength(P, distance, data, mcdc):
+    tally = data[TALLY]
     material = mcdc["materials"][P["material_ID"]]
+    mesh = mcdc["tally"]["mesh"]
+    stride = mcdc["tally"]["stride"]
 
     # Get indices
     s = P["sensitivity_ID"]
-    t, x, y, z, outside = mesh_get_index(P, tally["mesh"])
-    mu, azi = mesh_get_angular_index(P, tally["mesh"])
-    g, outside_energy = mesh_get_energy_index(P, tally["mesh"], mcdc)
+    it, ix, iy, iz, outside = mesh_get_index(P, mesh)
+    mu, azi = mesh_get_angular_index(P, mesh)
+    g, outside_energy = mesh_get_energy_index(P, mesh, mcdc["setting"]["mode_MG"])
 
     # Outside grid?
     if outside or outside_energy:
         return
 
+    # The tally index
+    idx = (
+        s * stride["sensitivity"]
+        + mu * stride["mu"]
+        + azi * stride["azi"]
+        + g * stride["g"]
+        + it * stride["t"]
+        + ix * stride["x"]
+        + iy * stride["y"]
+        + iz * stride["z"]
+    )
+
     # Score
     flux = distance * P["w"]
-    if tally["flux"]:
-        score_flux(s, g, t, x, y, z, mu, azi, flux, tally["score"]["flux"])
-    if tally["density"]:
-        flux /= get_particle_speed(P, mcdc)
-        score_flux(s, g, t, x, y, z, mu, azi, flux, tally["score"]["density"])
-    if tally["fission"]:
-        flux *= get_MacroXS(XS_FISSION, material, P, mcdc)
-        score_flux(s, g, t, x, y, z, mu, azi, flux, tally["score"]["fission"])
-    if tally["total"]:
-        flux *= get_MacroXS(XS_TOTAL, material, P, mcdc)
-        score_flux(s, g, t, x, y, z, mu, azi, flux, tally["score"]["total"])
-    if tally["current"]:
-        score_current(s, g, t, x, y, z, flux, P, tally["score"]["current"])
-    if tally["eddington"]:
-        score_eddington(s, g, t, x, y, z, flux, P, tally["score"]["eddington"])
+    tally[TALLY_SCORE, idx] += flux
 
 
 @njit
-def score_exit(P, x, mcdc):
-    tally = mcdc["tally"]
-    material = mcdc["materials"][P["material_ID"]]
+def tally_reduce(data, mcdc):
+    tally = data[TALLY]
+    N_bin = mcdc['tally']['N_bin']
 
-    s = P["sensitivity_ID"]
-    mu, azi = mesh_get_angular_index(P, tally["mesh"])
-    g, outside_energy = mesh_get_energy_index(P, tally["mesh"], mcdc)
-
-    # Outside grid?
-    if outside_energy:
-        return
-
-    # Score
-    flux = P["w"] / abs(P["ux"])
-    score_flux(s, g, 0, x, 0, 0, mu, azi, flux, tally["score"]["exit"])
-
-
-@njit
-def score_flux(s, g, t, x, y, z, mu, azi, flux, score):
-    # score["bin"][s, g, t, x, y, z, mu, azi] += flux
-    adapt.global_add(score["bin"], (s, g, t, x, y, z, mu, azi), flux)
-
-
-@njit
-def score_current(s, g, t, x, y, z, flux, P, score):
-    # score["bin"][s, g, t, x, y, z, 0] += flux * P["ux"]
-    # score["bin"][s, g, t, x, y, z, 1] += flux * P["uy"]
-    # score["bin"][s, g, t, x, y, z, 2] += flux * P["uz"]
-    adapt.global_add(score["bin"], (s, g, t, x, y, z, 0), flux * P["ux"])
-    adapt.global_add(score["bin"], (s, g, t, x, y, z, 1), flux * P["uy"])
-    adapt.global_add(score["bin"], (s, g, t, x, y, z, 2), flux * P["uz"])
-
-
-@njit
-def score_eddington(s, g, t, x, y, z, flux, P, score):
-    ux = P["ux"]
-    uy = P["uy"]
-    uz = P["uz"]
-    # score["bin"][s, g, t, x, y, z, 0] += flux * ux * ux
-    # score["bin"][s, g, t, x, y, z, 1] += flux * ux * uy
-    # score["bin"][s, g, t, x, y, z, 2] += flux * ux * uz
-    # score["bin"][s, g, t, x, y, z, 3] += flux * uy * uy
-    # score["bin"][s, g, t, x, y, z, 4] += flux * uy * uz
-    # score["bin"][s, g, t, x, y, z, 5] += flux * uz * uz
-    adapt.global_add(score["bin"], (s, g, t, x, y, z, 0), flux * ux * ux)
-    adapt.global_add(score["bin"], (s, g, t, x, y, z, 1), flux * ux * uy)
-    adapt.global_add(score["bin"], (s, g, t, x, y, z, 2), flux * ux * uz)
-    adapt.global_add(score["bin"], (s, g, t, x, y, z, 3), flux * uy * uy)
-    adapt.global_add(score["bin"], (s, g, t, x, y, z, 4), flux * uy * uz)
-    adapt.global_add(score["bin"], (s, g, t, x, y, z, 5), flux * uz * uz)
-
-
-@njit
-def score_reduce_bin(score, mcdc):
     # Normalize
-    score["bin"][:] /= mcdc["setting"]["N_particle"]
+    N_particle = mcdc["setting"]["N_particle"]
+    for i in range(N_bin):
+        tally[TALLY_SCORE][i] /= N_particle
 
     # MPI Reduce
-    buff = np.zeros_like(score["bin"])
+    buff = np.zeros_like(tally[TALLY_SCORE])
     with objmode():
-        MPI.COMM_WORLD.Reduce(np.array(score["bin"]), buff, MPI.SUM, 0)
-    score["bin"][:] = buff
+        MPI.COMM_WORLD.Reduce(tally[TALLY_SCORE], buff, MPI.SUM, 0)
+    tally[TALLY_SCORE][:] = buff
 
 
 @njit
-def score_closeout_history(score):
-    # Accumulate score and square of score into mean and sdev
-    score["mean"][:] += score["bin"]
-    score["sdev"][:] += np.square(score["bin"])
+def tally_accumulate(data, mcdc):
+    tally = data[TALLY]
+    N_bin = mcdc['tally']['N_bin']
 
-    # Reset bin
-    score["bin"].fill(0.0)
+    for i in range(N_bin):
+        # Accumulate score and square of score into sum and sum_sq
+        score = tally[TALLY_SCORE, i]
+        tally[TALLY_SUM, i] += score
+        tally[TALLY_SUM_SQ, i] += score * score
+
+        # Reset score bin
+        tally[TALLY_SCORE, i] = 0.0
 
 
 @njit
-def score_closeout(score, mcdc):
+def tally_closeout(data, mcdc):
+    tally = data[TALLY]
     N_history = mcdc["setting"]["N_particle"]
 
     if mcdc["setting"]["N_batch"] > 1:
@@ -2259,46 +2209,22 @@ def score_closeout(score, mcdc):
 
     else:
         # MPI Reduce
-        buff = np.zeros_like(score["mean"])
-        buff_sq = np.zeros_like(score["sdev"])
+        buff = np.zeros_like(tally[TALLY_SUM])
+        buff_sq = np.zeros_like(tally[TALLY_SUM_SQ])
         with objmode():
-            MPI.COMM_WORLD.Reduce(np.array(score["mean"]), buff, MPI.SUM, 0)
-            MPI.COMM_WORLD.Reduce(np.array(score["sdev"]), buff_sq, MPI.SUM, 0)
-        score["mean"][:] = buff
-        score["sdev"][:] = buff_sq
+            MPI.COMM_WORLD.Reduce(tally[TALLY_SUM], buff, MPI.SUM, 0)
+            MPI.COMM_WORLD.Reduce(tally[TALLY_SUM_SQ], buff_sq, MPI.SUM, 0)
+        tally[TALLY_SUM] = buff
+        tally[TALLY_SUM_SQ] = buff_sq
 
-    # Store results
-    score["mean"][:] = score["mean"] / N_history
-    score["sdev"][:] = np.sqrt(
-        (score["sdev"] / N_history - np.square(score["mean"])) / (N_history - 1)
+    # Calculate and store statistics
+    #   sum --> mean
+    #   sum_sq --> standard deviation
+    tally[TALLY_SUM] = tally[TALLY_SUM] / N_history
+    tally[TALLY_SUM_SQ] = np.sqrt(
+        (tally[TALLY_SUM_SQ] / N_history - np.square(tally[TALLY_SUM]))
+        / (N_history - 1)
     )
-
-
-@njit
-def tally_reduce_bin(mcdc):
-    tally = mcdc["tally"]
-
-    for name in literal_unroll(score_list):
-        if tally[name]:
-            score_reduce_bin(tally["score"][name], mcdc)
-
-
-@njit
-def tally_closeout_history(mcdc):
-    tally = mcdc["tally"]
-
-    for name in literal_unroll(score_list):
-        if tally[name]:
-            score_closeout_history(tally["score"][name])
-
-
-@njit
-def tally_closeout(mcdc):
-    tally = mcdc["tally"]
-
-    for name in literal_unroll(score_list):
-        if tally[name]:
-            score_closeout(tally["score"][name], mcdc)
 
 
 # =============================================================================
@@ -2522,7 +2448,7 @@ def eigenvalue_tally_closeout(mcdc):
 
 
 @njit
-def move_to_event(P, mcdc):
+def move_to_event(P, data, mcdc):
     # =========================================================================
     # Get distances to events
     # =========================================================================
@@ -2603,8 +2529,8 @@ def move_to_event(P, mcdc):
             P["alive"] = False
 
     # Score tracklength tallies
-    if mcdc["tally"]["tracklength"] and mcdc["cycle_active"]:
-        score_tracklength(P, distance, mcdc)
+    if mcdc["cycle_active"]:
+        score_tracklength(P, distance, data, mcdc)
     if mcdc["setting"]["mode_eigenvalue"]:
         eigenvalue_tally(P, distance, mcdc)
 
@@ -2780,13 +2706,6 @@ def surface_crossing(P, prog):
 
     # Record old material for sensitivity quantification
     material_ID_old = P["material_ID"]
-
-    # Tally particle exit
-    if mcdc["tally"]["exit"] and not P["alive"]:
-        # Reflectance if P["surface_ID"] == 0, else transmittance
-        exit_idx = surface_exit_evaluate(P)
-        # Score on tally
-        score_exit(P, exit_idx, mcdc)
 
     # Check new cell?
     if P["alive"] and not surface["BC"] == BC_REFLECTIVE:
@@ -4163,7 +4082,7 @@ def iqmc_linear_tilt(mu, x, dx, x_mid, dy, dz, w, distance, SigmaT):
 
 
 @toggle("iQMC")
-def AxV(V, b, mcdc):
+def AxV(V, b, data, mcdc):
     """
     Linear operator to be used with GMRES.
     Calculate action of A on input vector V, where A is a transport sweep
@@ -4180,7 +4099,7 @@ def AxV(V, b, mcdc):
     iqmc_prepare_particles(mcdc)
     iqmc_reset_tallies(iqmc)
     iqmc["sweep_counter"] += 1
-    loop_source(0, mcdc)
+    loop_source(0, data, mcdc)
     # sum resultant flux on all processors
     iqmc_distribute_tallies(iqmc)
     # update source adds effective scattering + fission + fixed-source
@@ -5052,78 +4971,48 @@ def uq_reset(mcdc, seed):
 
 
 @njit
-def uq_tally_closeout_history(mcdc):
-    tally = mcdc["tally"]
+def uq_tally_closeout_history(data, mcdc):
+    tally = data[TALLY]
     uq_tally = mcdc["technique"]["uq_tally"]
 
-    for name in literal_unroll(score_list):
-        if uq_tally[name]:
-            uq_score_closeout_history(tally["score"][name], uq_tally["score"][name])
-
-
-@njit
-def uq_score_closeout_history(score, uq_score):
     # Assumes N_batch > 1
     # Accumulate square of history score, but continue to accumulate bin
-    history_bin = score["bin"] - uq_score["batch_bin"]
-    uq_score["batch_var"][:] += history_bin**2
-    uq_score["batch_bin"] = score["bin"]
+    history_bin = tally[TALLY_SCORE] - uq_tally["batch_bin"]
+    uq_tally["batch_var"][:] += history_bin**2
+    uq_tally["batch_bin"] = tally[TALLY_SCORE]
 
 
 @njit
 def uq_tally_closeout_batch(mcdc):
     uq_tally = mcdc["technique"]["uq_tally"]
 
-    for name in literal_unroll(score_list):
-        if uq_tally[name]:
-            # Reset bin
-            uq_tally["score"][name]["batch_bin"].fill(0.0)
-            uq_reduce_bin(uq_tally["score"][name])
+    # Reset bin
+    uq_tally["batch_bin"].fill(0.0)
 
-
-@njit
-def uq_reduce_bin(score):
     # MPI Reduce
-    buff = np.zeros_like(score["batch_var"])
+    buff = np.zeros_like(uq_tally["batch_var"])
     with objmode():
-        MPI.COMM_WORLD.Reduce(np.array(score["batch_var"]), buff, MPI.SUM, 0)
-    score["batch_var"][:] = buff
+        MPI.COMM_WORLD.Reduce(np.array(uq_tally["batch_var"]), buff, MPI.SUM, 0)
+    uq_tally["batch_var"][:] = buff
 
 
 @njit
-def uq_tally_closeout(mcdc):
-    tally = mcdc["tally"]
+def uq_tally_closeout(data, mcdc):
+    tally = data[TALLY]
     uq_tally = mcdc["technique"]["uq_tally"]
-
-    for name in literal_unroll(score_list):
-        # Uq_tally implies tally, but tally does not imply uq_tally
-        if uq_tally[name]:
-            uq_score_closeout(name, mcdc)
-        elif tally[name]:
-            score_closeout(tally["score"][name], mcdc)
-
-
-@njit
-def uq_score_closeout(name, mcdc):
-    score = mcdc["tally"]["score"][name]
-    uq_score = mcdc["technique"]["uq_tally"]["score"][name]
 
     N_history = mcdc["setting"]["N_particle"]
 
-    # At this point, score["sdev"] is still just the sum of the squared mean from every batch
-    uq_score["batch_var"] = (uq_score["batch_var"] / N_history - score["sdev"]) / (
-        N_history - 1
-    )
+    uq_tally["batch_var"] = (
+        uq_tally["batch_var"] / N_history - tally[TALLY_SUM_SQ]
+    ) / (N_history - 1)
 
     # If we're here, N_batch > 1
     N_history = mcdc["setting"]["N_batch"]
 
     # Store results
-    score["mean"][:] = score["mean"] / N_history
-    uq_score["batch_var"] /= N_history
-    uq_score["batch_bin"] = (score["sdev"] - N_history * np.square(score["mean"])) / (
+    mean = tally[TALLY_SUM] / N_history
+    uq_tally["batch_var"] /= N_history
+    uq_tally["batch_bin"] = (tally[TALLY_SUM_SQ] - N_history * np.square(mean)) / (
         N_history - 1
-    )
-    score["sdev"][:] = np.sqrt(
-        (score["sdev"] / N_history - np.square(score["mean"])) / (N_history - 1)
     )

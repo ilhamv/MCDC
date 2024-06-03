@@ -269,7 +269,7 @@ def source_closeout(prog, idx_work, N_prog, data):
 
 
 @njit(cache=caching)
-def source_dd_resolution(prog):
+def source_dd_resolution(data, prog):
     mcdc = adapt.device(prog)
 
     kernel.dd_particle_send(mcdc)
@@ -359,7 +359,7 @@ def loop_source(seed, data, mcdc):
         source_closeout(mcdc, idx_work, N_prog, data)
 
     if mcdc["technique"]["domain_decomposition"]:
-        source_dd_resolution(mcdc)
+        source_dd_resolution(data, mcdc)
 
 
 def gpu_sources_spec():
@@ -435,7 +435,7 @@ def gpu_loop_source(seed, mcdc):
     source_closeout(mcdc, 1, 1, data)
 
     if mcdc["technique"]["domain_decomposition"]:
-        source_dd_resolution(mcdc)
+        source_dd_resolution(data, mcdc)
 
 
 # =========================================================================

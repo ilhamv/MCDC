@@ -1,4 +1,4 @@
-import argparse, os, sys
+import argparse, os, sys, math
 import numba as nb
 
 # Parse command-line arguments
@@ -548,7 +548,7 @@ def prepare():
     N_cell = len(input_deck.cells)
     for i in range(N_cell):
         for name in type_.cell.names:
-            if name not in ["fill_type", "surface_IDs"]:
+            if name not in ["fill_type", "surface_IDs", "rotation", "fill_translated", "fill_rotated"]:
                 copy_field(mcdc["cells"][i], input_deck.cells[i], name)
 
         # Fill type
@@ -563,6 +563,32 @@ def prepare():
         for name in ["surface_IDs"]:
             N = mcdc["cells"][i]["N_surface"]
             mcdc["cells"][i][name][:N] = getattr(input_deck.cells[i], name)
+
+        # Set rotation
+        phi = -input_deck.cells[i].rotation[0] * PI / 180.0
+        theta = -input_deck.cells[i].rotation[1] * PI / 180.0
+        psi = -input_deck.cells[i].rotation[2] * PI / 180.0
+
+        mcdc['cells'][i]['rotation'][0] = math.cos(theta) * math.cos(psi)
+        mcdc['cells'][i]['rotation'][1] = -math.cos(phi) * math.sin(psi) + math.sin(phi) * math.sin(theta) * math.cos(psi)
+        mcdc['cells'][i]['rotation'][2] = math.sin(phi) * math.sin(psi) + math.cos(phi) * math.sin(theta) * math.cos(psi)
+
+        mcdc['cells'][i]['rotation'][3] = math.cos(theta) * math.sin(psi)
+        mcdc['cells'][i]['rotation'][4] = math.cos(phi) * math.cos(psi) + math.sin(phi) * math.sin(theta) * math.sin(psi)
+        mcdc['cells'][i]['rotation'][5] = -math.sin(phi) * math.cos(psi) + math.cos(phi) * math.sin(theta) * math.sin(psi)
+
+        mcdc['cells'][i]['rotation'][6] = -math.sin(theta)
+        mcdc['cells'][i]['rotation'][7] = math.sin(phi) * math.cos(theta)
+        mcdc['cells'][i]['rotation'][8] = math.cos(phi) * math.cos(theta)
+
+        # Check if fill is translated or rotated
+        for value in mcdc['cells'][i]['translation']:
+            if value != 0.0:
+                mcdc['cells'][i]['fill_translated'] = True
+        for value in mcdc['cells'][i]['rotation']:
+            if value != 0.0:
+                mcdc['cells'][i]['fill_rotated'] = True
+
 
     # =========================================================================
     # Universes

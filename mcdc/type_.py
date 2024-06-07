@@ -553,7 +553,10 @@ def make_type_cell(input_deck):
             ("region_ID", int64),
             ("fill_type", int64),
             ("fill_ID", int64),
+            ("fill_translated", bool_),
+            ("fill_rotated", bool_),
             ("translation", float64, (3,)),
+            ("rotation", float64, (9,)),
             ("N_surface", int64),
             ("surface_IDs", int64, (Nmax_surface,)),
         ]

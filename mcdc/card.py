@@ -182,6 +182,7 @@ class CellCard(InputCard):
         self.fill_type = "material"
         self.fill_ID = -1
         self.translation = np.array([0.0, 0.0, 0.0])
+        self.rotation = np.array([0.0, 0.0, 0.0])
         self.N_surface = 0
         self.surface_ID = np.zeros(0, dtype=int)
 

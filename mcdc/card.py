@@ -50,9 +50,6 @@ class NuclideCard(InputCard):
         self.chi_s = np.zeros([G, G])
         self.chi_p = np.zeros([G, G])
         self.chi_d = np.zeros([J, G])
-        self.sensitivity = False
-        self.sensitivity_ID = 0
-        self.dsm_Np = 1.0
         self.uq = False
         self.flags = []
         self.distribution = ""
@@ -80,7 +77,6 @@ class MaterialCard(InputCard):
         self.nu_f = np.zeros(G)
         self.chi_s = np.zeros([G, G])
         self.chi_p = np.zeros([G, G])
-        self.sensitivity = False
         self.uq = False
         self.flags = []
         self.distribution = ""
@@ -147,9 +143,6 @@ class SurfaceCard(InputCard):
         self.nx = 0.0
         self.ny = 0.0
         self.nz = 0.0
-        self.sensitivity = False
-        self.sensitivity_ID = 0
-        self.dsm_Np = 1.0
         self.N_tally = 0
         self.tally_IDs = []
 

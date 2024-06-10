@@ -189,7 +189,6 @@ def make_type_particle(input_deck):
         ("cell_ID", int64),
         ("surface_ID", int64),
         ("event", int64),
-        ("sensitivity_ID", int64),
         ("rng_seed", uint64),
     ]
 
@@ -228,7 +227,6 @@ def make_type_particle_record(input_deck):
         ("g", uint64),
         ("E", float64),
         ("w", float64),
-        ("sensitivity_ID", int64),
         ("rng_seed", uint64),
     ]
 
@@ -353,9 +351,6 @@ def make_type_nuclide(input_deck):
     struct = [
         ("ID", int64),
         ("fissionable", bool_),
-        ("sensitivity", bool_),
-        ("sensitivity_ID", int64),
-        ("dsm_Np", float64),
         ("uq", bool_),
     ]
 
@@ -451,7 +446,6 @@ def make_type_material(input_deck):
     struct = [
         ("ID", int64),
         ("N_nuclide", int64),
-        ("sensitivity", bool_),
         ("nuclide_IDs", int64, (Nmax_nuclide,)),
         ("nuclide_densities", float64, (Nmax_nuclide,)),
         ("uq", bool_),
@@ -513,9 +507,6 @@ def make_type_surface(input_deck):
             ("nx", float64),
             ("ny", float64),
             ("nz", float64),
-            ("sensitivity", bool_),
-            ("sensitivity_ID", int64),
-            ("dsm_Np", float64),
             ("N_tally", int64),
             ("tally_IDs", int64, (Nmax_tally,)),
         ]
@@ -719,7 +710,6 @@ def make_type_mesh_tally(input_deck):
     # Tally strides
     stride = [
         ("tally", int64),
-        ("sensitivity", int64),
         ("mu", int64),
         ("azi", int64),
         ("g", int64),
@@ -770,7 +760,6 @@ def make_type_surface_tally(input_deck):
     # Tally strides
     stride = [
         ("tally", int64),
-        ("sensitivity", int64),
         ("mu", int64),
         ("azi", int64),
         ("g", int64),
@@ -831,8 +820,6 @@ def make_type_setting(deck):
         ("IC_file", bool_),
         ("IC_file_name", str_),
         ("N_precursor", uint64),
-        # TODO: Move to technique
-        ("N_sensitivity", uint64),
     ]
 
     # Finalize setting type
@@ -1063,14 +1050,6 @@ def make_type_technique(input_deck):
         ("IC_bank_precursor", bank_precursor),
         ("IC_fission_score", float64, (1,)),
         ("IC_fission", float64),
-    ]
-
-    # =========================================================================
-    # Derivative Source Method
-    # =========================================================================
-
-    struct += [
-        ("dsm_order", int64),
     ]
 
     # =========================================================================

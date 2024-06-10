@@ -657,7 +657,6 @@ def source_particle_dd(seed, mcdc):
     P["uz"] = uz
     P["g"] = g
     P["w"] = 1
-    P["sensitivity_ID"] = 0
     return P
 
 
@@ -912,8 +911,6 @@ def source_particle(seed, mcdc):
     P["E"] = E
     P["w"] = 1.0
 
-    P["sensitivity_ID"] = 0
-
     return P
 
 
@@ -990,7 +987,6 @@ def get_particle(P, bank, mcdc):
         P["iqmc"]["w"] = P_rec["iqmc"]["w"]
 
     P["alive"] = True
-    P["sensitivity_ID"] = P_rec["sensitivity_ID"]
 
     # Set default IDs and event
     P["material_ID"] = -1
@@ -1638,7 +1634,6 @@ def copy_recordlike(P_new, P):
     P_new["E"] = P["E"]
     P_new["w"] = P["w"]
     P_new["rng_seed"] = P["rng_seed"]
-    P_new["sensitivity_ID"] = P["sensitivity_ID"]
     P_new["iqmc"]["w"] = P["iqmc"]["w"]
     copy_track_data(P_new, P)
 
@@ -1681,7 +1676,6 @@ def copy_particle(P_new, P):
     P_new["surface_ID"] = P["surface_ID"]
     P_new["translation"] = P["translation"]
     P_new["event"] = P["event"]
-    P_new["sensitivity_ID"] = P["sensitivity_ID"]
     P_new["rng_seed"] = P["rng_seed"]
     P_new["iqmc"]["w"] = P["iqmc"]["w"]
     copy_track_data(P_new, P)
@@ -1836,7 +1830,6 @@ def score_mesh_tally(P, distance, tally, data, mcdc):
     stride = tally["stride"]
 
     # Get indices
-    s = P["sensitivity_ID"]
     it, ix, iy, iz, outside = mesh_get_index(P, mesh)
     mu, azi = mesh_get_angular_index(P, mesh)
     g, outside_energy = mesh_get_energy_index(P, mesh, mcdc["setting"]["mode_MG"])
@@ -1848,7 +1841,6 @@ def score_mesh_tally(P, distance, tally, data, mcdc):
     # The tally index
     idx = (
         stride["tally"]
-        + s * stride["sensitivity"]
         + mu * stride["mu"]
         + azi * stride["azi"]
         + g * stride["g"]
@@ -2470,26 +2462,12 @@ def surface_crossing(P, data, prog):
     # Small shift to ensure crossing
     geometry.surface_shift(P, surface, mcdc)
 
-    # Record old material for sensitivity quantification
-    material_ID_old = P["material_ID"]
-
     # Check new cell?
     if P["alive"] and not surface["BC"] == BC_REFLECTIVE:
         cell = mcdc["cells"][P["cell_ID"]]
         if not geometry.check_cell(P, cell, mcdc):
             geometry.reset_local_coordinate(P)
             P["cell_ID"] = geometry.get_cell(P, UNIVERSE_ROOT, mcdc)
-
-    # Sensitivity quantification for surface?
-    if surface["sensitivity"] and (
-        P["sensitivity_ID"] == 0
-        or mcdc["technique"]["dsm_order"] == 2
-        and P["sensitivity_ID"] <= mcdc["setting"]["N_sensitivity"]
-    ):
-        material_ID_new = get_particle_material(P, mcdc)
-        if material_ID_old != material_ID_new:
-            # Sample derivative source particles
-            sensitivity_surface(P, surface, material_ID_old, material_ID_new, prog)
 
 
 # =============================================================================
@@ -2602,7 +2580,6 @@ def sample_phasespace_scattering(P, material, P_new, mcdc):
     P_new["y"] = P["y"]
     P_new["z"] = P["z"]
     P_new["t"] = P["t"]
-    P_new["sensitivity_ID"] = P["sensitivity_ID"]
 
     if mcdc["setting"]["mode_MG"]:
         scattering_MG(P, material, P_new)
@@ -2617,7 +2594,6 @@ def sample_phasespace_scattering_nuclide(P, nuclide, P_new, mcdc):
     P_new["y"] = P["y"]
     P_new["z"] = P["z"]
     P_new["t"] = P["t"]
-    P_new["sensitivity_ID"] = P["sensitivity_ID"]
 
     scattering_MG(P, nuclide, P_new)
 
@@ -2892,7 +2868,6 @@ def sample_phasespace_fission(P, material, P_new, mcdc):
     P_new["y"] = P["y"]
     P_new["z"] = P["z"]
     P_new["t"] = P["t"]
-    P_new["sensitivity_ID"] = P["sensitivity_ID"]
 
     # Sample isotropic direction
     P_new["ux"], P_new["uy"], P_new["uz"] = sample_isotropic_direction(P_new)
@@ -2953,7 +2928,6 @@ def sample_phasespace_fission_nuclide(P, nuclide, P_new, mcdc):
     P_new["y"] = P["y"]
     P_new["z"] = P["z"]
     P_new["t"] = P["t"]
-    P_new["sensitivity_ID"] = P["sensitivity_ID"]
 
     # Sample isotropic direction
     P_new["ux"], P_new["uy"], P_new["uz"] = sample_isotropic_direction(P_new)
@@ -3893,345 +3867,6 @@ def weight_roulette(P, mcdc):
 
 
 # ==============================================================================
-# Sensitivity quantification (Derivative Source Method)
-# =============================================================================
-
-
-@njit
-def sensitivity_surface(P, surface, material_ID_old, material_ID_new, prog):
-
-    mcdc = adapt.device(prog)
-
-    # Sample number of derivative sources
-    xi = surface["dsm_Np"]
-    if xi != 1.0:
-        Np = int(math.floor(xi + rng(P)))
-    else:
-        Np = 1
-
-    # Terminate and put the current particle into the secondary bank
-    P["alive"] = False
-    adapt.add_active(copy_record(P), prog)
-
-    # Get sensitivity ID
-    ID = surface["sensitivity_ID"]
-    if mcdc["technique"]["dsm_order"] == 2:
-        ID1 = min(P["sensitivity_ID"], ID)
-        ID2 = max(P["sensitivity_ID"], ID)
-        ID = get_DSM_ID(ID1, ID2, mcdc["setting"]["N_sensitivity"])
-
-    # Get materials
-    material_old = mcdc["materials"][material_ID_old]
-    material_new = mcdc["materials"][material_ID_new]
-
-    # Determine the plus and minus components and then their weight signs
-    sign_origin = geometry.surface_normal_component(P, surface)
-    if sign_origin > 0.0:
-        # New is +, old is -
-        sign_new = -1.0
-        sign_old = 1.0
-    else:
-        sign_new = 1.0
-        sign_old = -1.0
-
-    # Get XS
-    g = P["g"]
-    SigmaT_old = material_old["total"][g]
-    SigmaT_new = material_new["total"][g]
-    SigmaS_old = material_old["scatter"][g]
-    SigmaS_new = material_new["scatter"][g]
-    SigmaF_old = material_old["fission"][g]
-    SigmaF_new = material_new["fission"][g]
-    nu_s_old = material_old["nu_s"][g]
-    nu_s_new = material_new["nu_s"][g]
-    nu_old = material_old["nu_f"][g]
-    nu_new = material_new["nu_f"][g]
-    nuSigmaS_old = nu_s_old * SigmaS_old
-    nuSigmaS_new = nu_s_new * SigmaS_new
-    nuSigmaF_old = nu_old * SigmaF_old
-    nuSigmaF_new = nu_new * SigmaF_new
-
-    # Get source type probabilities
-    delta = -(SigmaT_old * sign_old + SigmaT_new * sign_new)
-    scatter = nuSigmaS_old * sign_old + nuSigmaS_new * sign_new
-    fission = nuSigmaF_old * sign_old + nuSigmaF_new * sign_new
-    p_delta = abs(delta)
-    p_scatter = abs(scatter)
-    p_fission = abs(fission)
-    p_total = p_delta + p_scatter + p_fission
-
-    # Get inducing flux
-    #   Apply constant flux approximation for tangent direction
-    #   [Dupree 2002, Eq. (7.39)]
-    mu = abs(sign_origin)
-    epsilon = 0.01
-    if mu < epsilon:
-        mu = epsilon / 2
-    flux = P["w"] / mu
-
-    # Base weight
-    w_hat = p_total * flux / xi
-
-    # Sample the derivative sources
-    for n in range(Np):
-        # Create new particle
-        P_new = split_particle(P)
-
-        # Sample source type
-        xi = rng(P) * p_total
-        tot = p_delta
-        if tot > xi:
-            # Delta source
-            sign_delta = delta / p_delta
-            P_new["w"] = w_hat * sign_delta
-        else:
-            tot += p_scatter
-            if tot > xi:
-                # Scattering source
-                total_scatter = nuSigmaS_old + nuSigmaS_new
-                w_s = w_hat * total_scatter / p_scatter
-
-                # Sample if it is from + or - component
-                if nuSigmaS_old > rng(P) * total_scatter:
-                    sample_phasespace_scattering(P, material_old, P_new, mcdc)
-                    P_new["w"] = w_s * sign_old
-                else:
-                    sample_phasespace_scattering(P, material_new, P_new, mcdc)
-                    P_new["w"] = w_s * sign_new
-            else:
-                # Fission source
-                total_fission = nuSigmaF_old + nuSigmaF_new
-                w_f = w_hat * total_fission / p_fission
-
-                # Sample if it is from + or - component
-                if nuSigmaF_old > rng(P) * total_fission:
-                    sample_phasespace_fission(P, material_old, P_new, mcdc)
-                    P_new["w"] = w_f * sign_old
-                else:
-                    sample_phasespace_fission(P, material_new, P_new, mcdc)
-                    P_new["w"] = w_f * sign_new
-
-        # Assign sensitivity_ID
-        P_new["sensitivity_ID"] = ID
-
-        # Shift back if needed to ensure crossing
-        sign = geometry.surface_normal_component(P_new, surface)
-        if sign_origin * sign > 0.0:
-            # Get surface normal
-            nx, ny, nz = geometry.surface_normal(P_new, surface)
-
-            # The shift
-            if sign > 0.0:
-                P_new["x"] -= nx * 2 * SHIFT
-                P_new["y"] -= ny * 2 * SHIFT
-                P_new["z"] -= nz * 2 * SHIFT
-            else:
-                P_new["x"] += nx * 2 * SHIFT
-                P_new["y"] += ny * 2 * SHIFT
-                P_new["z"] += nz * 2 * SHIFT
-
-        # Put the current particle into the secondary bank
-        adapt.add_active(P_new, prog)
-
-    # Sample potential second-order sensitivity particles?
-    if mcdc["technique"]["dsm_order"] < 2 or P["sensitivity_ID"] > 0:
-        return
-
-    # Get total probability
-    p_total = 0.0
-    for material in [material_new, material_old]:
-        if material["sensitivity"]:
-            N_nuclide = material["N_nuclide"]
-            for i in range(N_nuclide):
-                nuclide = mcdc["nuclides"][material["nuclide_IDs"][i]]
-                if nuclide["sensitivity"]:
-                    sigmaT = nuclide["total"][g]
-                    sigmaS = nuclide["scatter"][g]
-                    sigmaF = nuclide["fission"][g]
-                    nu_s = nuclide["nu_s"][g]
-                    nu = nuclide["nu_f"][g]
-                    nusigmaS = nu_s * sigmaS
-                    nusigmaF = nu * sigmaF
-                    total = sigmaT + nusigmaS + nusigmaF
-                    p_total += total
-
-    # Base weight
-    w = p_total * flux / surface["dsm_Np"]
-
-    # Sample source
-    for n in range(Np):
-        source_obtained = False
-
-        # Create new particle
-        P_new = split_particle(P)
-
-        # Sample term
-        xi = rng(P_new) * p_total
-        tot = 0.0
-
-        for idx in range(2):
-
-            if idx == 0:
-                material_ID = material_ID_old
-                sign = sign_old
-            else:
-                material_ID = material_ID_new
-                sign = sign_new
-
-            material = mcdc["materials"][material_ID]
-            if material["sensitivity"]:
-                N_nuclide = material["N_nuclide"]
-                for i in range(N_nuclide):
-                    nuclide = mcdc["nuclides"][material["nuclide_IDs"][i]]
-                    if nuclide["sensitivity"]:
-                        # Source ID
-                        ID1 = min(nuclide["sensitivity_ID"], surface["sensitivity_ID"])
-                        ID2 = max(nuclide["sensitivity_ID"], surface["sensitivity_ID"])
-                        ID_source = get_DSM_ID(
-                            ID1, ID2, mcdc["setting"]["N_sensitivity"]
-                        )
-
-                        sigmaT = nuclide["total"][g]
-                        sigmaS = nuclide["scatter"][g]
-                        sigmaF = nuclide["fission"][g]
-                        nu_s = nuclide["nu_s"][g]
-                        nu = nuclide["nu_f"][g]
-                        nusigmaS = nu_s * sigmaS
-                        nusigmaF = nu * sigmaF
-
-                        tot += sigmaT
-                        if tot > xi:
-                            # Delta source
-                            P_new["w"] = -w * sign
-                            P_new["sensitivity_ID"] = ID_source
-                            adapt.add_active(P_new, prog)
-                            source_obtained = True
-                        else:
-                            P_new["w"] = w * sign
-
-                            tot += nusigmaS
-                            if tot > xi:
-                                # Scattering source
-                                sample_phasespace_scattering_nuclide(
-                                    P, nuclide, P_new, mcdc
-                                )
-                                P_new["sensitivity_ID"] = ID_source
-                                adapt.add_active(P_new, prog)
-                                source_obtained = True
-                            else:
-                                tot += nusigmaF
-                                if tot > xi:
-                                    # Fission source
-                                    sample_phasespace_fission_nuclide(
-                                        P, nuclide, P_new, mcdc
-                                    )
-                                    P_new["sensitivity_ID"] = ID_source
-                                    adapt.add_active(P_new, prog)
-                                    source_obtained = True
-                    if source_obtained:
-                        break
-                if source_obtained:
-                    break
-
-
-@njit
-def sensitivity_material(P, prog):
-
-    mcdc = adapt.device(prog)
-
-    # The incident particle is already terminated
-
-    # Get material
-    material = mcdc["materials"][P["material_ID"]]
-
-    # Check if sensitivity nuclide is sampled
-    g = P["g"]
-    SigmaT = material["total"][g]
-    N_nuclide = material["N_nuclide"]
-    if N_nuclide == 1:
-        nuclide = mcdc["nuclides"][material["nuclide_IDs"][0]]
-    else:
-        xi = rng(P) * SigmaT
-        tot = 0.0
-        for i in range(N_nuclide):
-            nuclide = mcdc["nuclides"][material["nuclide_IDs"][i]]
-            density = material["nuclide_densities"][i]
-            tot += density * nuclide["total"][g]
-            if xi < tot:
-                break
-    if not nuclide["sensitivity"]:
-        return
-
-    # Sample number of derivative sources
-    xi = nuclide["dsm_Np"]
-    if xi != 1.0:
-        Np = int(math.floor(xi + rng(P)))
-    else:
-        Np = 1
-
-    # Get sensitivity ID
-    ID = nuclide["sensitivity_ID"]
-    double = False
-    if mcdc["technique"]["dsm_order"] == 2:
-        ID1 = min(P["sensitivity_ID"], ID)
-        ID2 = max(P["sensitivity_ID"], ID)
-        ID = get_DSM_ID(ID1, ID2, mcdc["setting"]["N_sensitivity"])
-        if ID1 == ID2:
-            double = True
-
-    # Undo implicit capture
-    if mcdc["technique"]["implicit_capture"]:
-        SigmaC = material["capture"][g]
-        P["w"] *= SigmaT / (SigmaT - SigmaC)
-
-    # Get XS
-    g = P["g"]
-    sigmaT = nuclide["total"][g]
-    sigmaS = nuclide["scatter"][g]
-    sigmaF = nuclide["fission"][g]
-    nu_s = nuclide["nu_s"][g]
-    nu = nuclide["nu_f"][g]
-    nusigmaS = nu_s * sigmaS
-    nusigmaF = nu * sigmaF
-
-    # Base weight
-    total = sigmaT + nusigmaS + nusigmaF
-    w = total * P["w"] / sigmaT / xi
-
-    # Double if it's self-second-order
-    if double:
-        w *= 2
-
-    # Sample the derivative sources
-    for n in range(Np):
-        # Create new particle
-        P_new = split_particle(P)
-
-        # Sample source type
-        xi = rng(P_new) * total
-        tot = sigmaT
-        if tot > xi:
-            # Delta source
-            P_new["w"] = -w
-        else:
-            P_new["w"] = w
-
-            tot += nusigmaS
-            if tot > xi:
-                # Scattering source
-                sample_phasespace_scattering_nuclide(P, nuclide, P_new, mcdc)
-            else:
-                # Fission source
-                sample_phasespace_fission_nuclide(P, nuclide, P_new, mcdc)
-
-        # Assign sensitivity_ID
-        P_new["sensitivity_ID"] = ID
-
-        # Put the current particle into the secondary bank
-        adapt.add_active(P_new, prog)
-
-
-# ==============================================================================
 # Particle tracker
 # ==============================================================================
 
@@ -4263,29 +3898,6 @@ def allocate_hid(P, mcdc):
 @toggle("particle_tracker")
 def allocate_pid(P, mcdc):
     P["track_pid"] = adapt.global_add(mcdc["particle_track_particle_ID"], 0, 1)
-
-
-# ==============================================================================
-# Derivative Source Method (DSM)
-# ==============================================================================
-
-
-@njit
-def get_DSM_ID(ID1, ID2, Np):
-    # First-order sensitivity
-    if ID1 == 0:
-        return ID2
-
-    # Self second-order
-    if ID1 == ID2:
-        return Np + ID1
-
-    # Cross second-order
-    ID1 -= 1
-    ID2 -= 1
-    return int(
-        2 * Np + (Np * (Np - 1) / 2) - (Np - ID1) * ((Np - ID1) - 1) / 2 + ID2 - ID1
-    )
 
 
 # =============================================================================

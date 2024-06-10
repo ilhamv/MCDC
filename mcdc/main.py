@@ -409,7 +409,7 @@ def prepare():
     N_nuclide = len(input_deck.nuclides)
     for i in range(N_nuclide):
         # General data
-        for name in ["ID", "fissionable", "sensitivity", "sensitivity_ID", "dsm_Np"]:
+        for name in ["ID", "fissionable"]:
             copy_field(mcdc["nuclides"][i], input_deck.nuclides[i], name)
 
         # MG data
@@ -675,10 +675,6 @@ def prepare():
             mcdc["mesh_tallies"][i]["scores"][j] = score_type
 
         # Filter grid sizes
-        N_sensitivity = input_deck.setting["N_sensitivity"]
-        Ns = 1 + N_sensitivity
-        if input_deck.technique["dsm_order"] == 2:
-            Ns = 1 + 2 * N_sensitivity + int(0.5 * N_sensitivity * (N_sensitivity - 1))
         Nmu = len(input_deck.mesh_tallies[i].mu) - 1
         N_azi = len(input_deck.mesh_tallies[i].azi) - 1
         Ng = len(input_deck.mesh_tallies[i].g) - 1
@@ -688,7 +684,7 @@ def prepare():
         Nt = len(input_deck.mesh_tallies[i].t) - 1
 
         # Update N_bin
-        mcdc["mesh_tallies"][i]["N_bin"] *= Ns * N_score
+        mcdc["mesh_tallies"][i]["N_bin"] *= N_score
 
         # Filter strides
         stride = N_score
@@ -713,8 +709,6 @@ def prepare():
         if Nmu > 1:
             mcdc["mesh_tallies"][i]["stride"]["mu"] = stride
             stride *= Nmu
-        if Ns > 1:
-            mcdc["mesh_tallies"][i]["stride"]["sensitivity"] = stride
 
         # Set tally stride and accumulate total tally size
         mcdc["mesh_tallies"][i]["stride"]["tally"] = tally_size
@@ -747,17 +741,13 @@ def prepare():
             mcdc["surface_tallies"][i]["scores"][j] = score_type
 
         # Filter grid sizes
-        N_sensitivity = input_deck.setting["N_sensitivity"]
-        Ns = 1 + N_sensitivity
-        if input_deck.technique["dsm_order"] == 2:
-            Ns = 1 + 2 * N_sensitivity + int(0.5 * N_sensitivity * (N_sensitivity - 1))
         Nmu = len(input_deck.surface_tallies[i].mu) - 1
         N_azi = len(input_deck.surface_tallies[i].azi) - 1
         Ng = len(input_deck.surface_tallies[i].g) - 1
         Nt = len(input_deck.surface_tallies[i].t) - 1
 
         # Update N_bin
-        mcdc["surface_tallies"][i]["N_bin"] *= Ns * N_score
+        mcdc["surface_tallies"][i]["N_bin"] *= N_score
 
         # Filter strides
         stride = N_score
@@ -773,8 +763,6 @@ def prepare():
         if Nmu > 1:
             mcdc["surface_tallies"][i]["stride"]["mu"] = stride
             stride *= Nmu
-        if Ns > 1:
-            mcdc["surface_tallies"][i]["stride"]["sensitivity"] = stride
 
         # Set tally stride and accumulate total tally size
         mcdc["surface_tallies"][i]["stride"]["tally"] = tally_size
@@ -963,12 +951,6 @@ def prepare():
             np.random.seed(seeds[mcdc["mpi_rank"]])
             iqmc["lds"] = np.random.random((N_work, N_dim))
 
-    # =========================================================================
-    # Derivative Source Method
-    # =========================================================================
-
-    # Threshold
-    mcdc["technique"]["dsm_order"] = input_deck.technique["dsm_order"]
 
     # =========================================================================
     # Variance Deconvolution - UQ
@@ -1245,14 +1227,6 @@ def generate_hdf5(data, mcdc):
                 f.create_dataset("tallies/mesh_tally_%i/grid/g" % ID, data=mesh["g"])
 
                 # Shape
-                N_sensitivity = input_deck.setting["N_sensitivity"]
-                Ns = 1 + N_sensitivity
-                if input_deck.technique["dsm_order"] == 2:
-                    Ns = (
-                        1
-                        + 2 * N_sensitivity
-                        + int(0.5 * N_sensitivity * (N_sensitivity - 1))
-                    )
                 Nmu = len(mesh["mu"]) - 1
                 N_azi = len(mesh["azi"]) - 1
                 Ng = len(mesh["g"]) - 1
@@ -1263,9 +1237,9 @@ def generate_hdf5(data, mcdc):
                 N_score = tally["N_score"]
 
                 if not mcdc["technique"]["uq"]:
-                    shape = (3, Ns, Nmu, N_azi, Ng, Nt, Nx, Ny, Nz, N_score)
+                    shape = (3, Nmu, N_azi, Ng, Nt, Nx, Ny, Nz, N_score)
                 else:
-                    shape = (5, Ns, Nmu, N_azi, Ng, Nt, Nx, Ny, Nz, N_score)
+                    shape = (5, Nmu, N_azi, Ng, Nt, Nx, Ny, Nz, N_score)
 
                 # Reshape tally
                 N_bin = tally["N_bin"]
@@ -1274,7 +1248,7 @@ def generate_hdf5(data, mcdc):
                 tally_bin = tally_bin.reshape(shape)
 
                 # Roll tally so that score is in the front
-                tally_bin = np.rollaxis(tally_bin, 9, 0)
+                tally_bin = np.rollaxis(tally_bin, 8, 0)
 
                 # Iterate over scores
                 for i in range(N_score):

@@ -22,7 +22,7 @@ from mcdc.constant import (
 # ======================================================================================
 
 
-@nb.njit(cache=True)
+@nb.njit
 def reset_local_coordinate(particle):
     """
     Reset local coordinate so that it is equivalent to the global coordinate
@@ -36,7 +36,7 @@ def reset_local_coordinate(particle):
     particle["uz_local"] = particle["uz"]
 
 
-@nb.njit(cache=True)
+@nb.njit
 def translate_local_coordinate(particle, translation):
     """
     Translate local coordinate wrt the given translation
@@ -46,7 +46,7 @@ def translate_local_coordinate(particle, translation):
     particle["z_local"] -= translation[2]
 
 
-@nb.njit(cache=True)
+@nb.njit
 def rotate_local_coordinate(particle, rotation):
     """
     Rotate both local coordinate and direction wrt the given rotation
@@ -106,91 +106,67 @@ def check_region(particle, region, mcdc):
     Check if a particle is in the given region
     """
     if region["type"] == REGION_HALFSPACE:
-        return check_region_halfspace(particle, region, mcdc)
+        """
+        In halfspace region
+            A: ID of the reference surface, and
+            B: Toggle indicating if the region is in the positive side of the surface.
+        """
+        surface_ID = region["A"]
+        positive_side = region["B"]
+
+        surface = mcdc["surfaces"][surface_ID]
+        side = surface_evaluate(particle, surface)
+
+        if positive_side:
+            if side > 0.0:
+                return True
+        elif side < 0.0:
+            return True
+
+        return False
 
     elif region["type"] == REGION_INTERSECTION:
-        return check_region_intersection(particle, region, mcdc)
+        """
+        In intersection region, A and B are the IDs of the intersecting regions.
+        """
+        region_A = mcdc["regions"][region["A"]]
+        region_B = mcdc["regions"][region["B"]]
+
+        check_A = check_region(particle, region_A, mcdc)
+        check_B = check_region(particle, region_B, mcdc)
+
+        if check_A and check_B:
+            return True
+        else:
+            return False
 
     elif region["type"] == REGION_COMPLEMENT:
-        return check_region_complement(particle, region, mcdc)
+        """
+        In complement region, A is the ID of the complemented region
+        """
+        region_A = mcdc["regions"][region["A"]]
+        if not check_region(particle, region_A, mcdc):
+            return True
+        else:
+            return False
 
     elif region["type"] == REGION_UNION:
-        return check_region_union(particle, region, mcdc)
+        """
+        In union region, A and B are the IDs of the unionized regions.
+        """
+        region_A = mcdc["regions"][region["A"]]
+        region_B = mcdc["regions"][region["B"]]
+
+        if check_region(particle, region_A, mcdc):
+            return True
+
+        if check_region(particle, region_B, mcdc):
+            return True
+
+        return False
 
     elif region["type"] == REGION_ALL:
         return True
-
-
-@nb.njit
-def check_region_halfspace(particle, region, mcdc):
-    """Check if the particle is in the halfspace region
-
-    In halfspace region
-        A: ID of the reference surface, and
-        B: Toggle indicating if the region is in the positive side of the surface.
-    """
-    surface_ID = region["A"]
-    positive_side = region["B"]
-
-    surface = mcdc["surfaces"][surface_ID]
-    side = surface_evaluate(particle, surface)
-
-    if positive_side:
-        if side > 0.0:
-            return True
-    elif side < 0.0:
-        return True
-
-    return False
-
-
-@nb.njit
-def check_region_intersection(particle, region, mcdc):
-    """Check if the particle is in the intersection region
-
-    In intersection region, A and B are the IDs of the intersecting regions.
-    """
-    region_A = mcdc["regions"][region["A"]]
-    region_B = mcdc["regions"][region["B"]]
-
-    check_A = check_region(particle, region_A, mcdc)
-    check_B = check_region(particle, region_B, mcdc)
-
-    if check_A and check_B:
-        return True
-    else:
-        return False
-
-
-@nb.njit
-def check_region_complement(particle, region, mcdc):
-    """Check if the particle is in the complement region
-
-    In complement region, A is the ID of the complemented region
-    """
-    region_A = mcdc["regions"][region["A"]]
-    if not check_region(particle, region_A, mcdc):
-        return True
-    else:
-        return False
-
-
-@nb.njit
-def check_region_union(particle, region, mcdc):
-    """Check if the particle is in the union region
-
-    In union region, A and B are the IDs of the unionized regions.
-    """
-    region_A = mcdc["regions"][region["A"]]
-    region_B = mcdc["regions"][region["B"]]
-
-    if check_region(particle, region_A, mcdc):
-        return True
-
-    if check_region(particle, region_B, mcdc):
-        return True
-
-    return False
 
 
 # =============================================================================

@@ -1589,7 +1589,7 @@ def get_particle_material(P, mcdc):
                 universe_ID = cell['fill_ID']
 
                 # Get inner cell
-                cell_ID = get_particle_cell(P, universe_ID, mcdc)
+                cell_ID = geometry.get_cell(P, universe_ID, mcdc)
                 cell = mcdc["cells"][cell_ID]
 
             elif cell["fill_type"] == FILL_LATTICE:
@@ -2331,7 +2331,7 @@ def distance_to_boundary(P, mcdc):
                 universe_ID = cell['fill_ID']
 
                 # Get inner cell
-                cell_ID = get_particle_cell(P, universe_ID, mcdc)
+                cell_ID = geometry.get_cell(P, universe_ID, mcdc)
                 cell = mcdc["cells"][cell_ID]
 
             elif cell["fill_type"] == FILL_LATTICE:

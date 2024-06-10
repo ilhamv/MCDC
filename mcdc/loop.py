@@ -823,7 +823,7 @@ def generate_precursor_particle(DNP, particle_idx, seed_work, prog):
 
     # Get material
     geometry.reset_local_coordinate(P_new)
-    P_new["cell_ID"] = kernel.get_particle_cell(P_new, UNIVERSE_ROOT, mcdc)
+    P_new["cell_ID"] = geometry.get_cell(P_new, UNIVERSE_ROOT, mcdc)
     material_ID = kernel.get_particle_material(P_new, mcdc)
     material = mcdc["materials"][material_ID]
     G = material["G"]

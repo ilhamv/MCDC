@@ -6,6 +6,7 @@ from scipy.linalg import eig
 from mpi4py import MPI
 
 import mcdc.adapt as adapt
+import mcdc.geometry as geometry
 import mcdc.kernel as kernel
 import mcdc.type_ as type_
 import pathlib
@@ -465,9 +466,8 @@ def step_particle(P, data, prog):
 
     # Find cell from root universe if unknown
     if P["cell_ID"] == -1:
-        trans_struct = adapt.local_translate()
-        trans = trans_struct["values"]
-        P["cell_ID"] = kernel.get_particle_cell(P, UNIVERSE_ROOT, trans, mcdc)
+        geometry.reset_local_coordinate(P)
+        P["cell_ID"] = geometry.get_cell(P, UNIVERSE_ROOT, mcdc)
 
     # Determine and move to event
     kernel.move_to_event(P, data, mcdc)
@@ -832,9 +832,8 @@ def generate_precursor_particle(DNP, particle_idx, seed_work, prog):
     P_new["z"] = DNP["z"]
 
     # Get material
-    trans_struct = adapt.local_translate()
-    trans = trans_struct["values"]
-    P_new["cell_ID"] = kernel.get_particle_cell(P_new, UNIVERSE_ROOT, trans, mcdc)
+    geometry.reset_local_coordinate(P_new)
+    P_new["cell_ID"] = kernel.get_particle_cell(P_new, UNIVERSE_ROOT, mcdc)
     material_ID = kernel.get_particle_material(P_new, mcdc)
     material = mcdc["materials"][material_ID]
     G = material["G"]

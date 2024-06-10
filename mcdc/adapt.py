@@ -384,19 +384,6 @@ def add_IC(particle, prog):
 
 
 @for_cpu()
-def local_translate():
-    return np.zeros(1, dtype=type_.translate)[0]
-
-
-@for_gpu()
-def local_translate():
-    trans = cuda.local.array(1, type_.translate)[0]
-    for i in range(3):
-        trans["values"][i] = 0
-    return trans
-
-
-@for_cpu()
 def local_group_array():
     return np.zeros(1, dtype=type_.group_array)[0]
 

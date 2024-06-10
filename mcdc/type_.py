@@ -45,7 +45,6 @@ surface_tally = None
 technique = None
 
 # GPU mode related
-translate = None
 group_array = None
 j_array = None
 global_ = None
@@ -175,6 +174,12 @@ def make_type_particle(input_deck):
         ("ux", float64),
         ("uy", float64),
         ("uz", float64),
+        ("x_local", float64),
+        ("y_local", float64),
+        ("z_local", float64),
+        ("ux_local", float64),
+        ("uy_local", float64),
+        ("uz_local", float64),
         ("g", uint64),
         ("E", float64),
         ("w", float64),
@@ -183,7 +188,6 @@ def make_type_particle(input_deck):
         ("material_ID", int64),
         ("cell_ID", int64),
         ("surface_ID", int64),
-        ("translation", float64, (3,)),
         ("event", int64),
         ("sensitivity_ID", int64),
         ("rng_seed", uint64),
@@ -1362,11 +1366,6 @@ def make_type_global(input_deck):
 # ==============================================================================
 # Util
 # ==============================================================================
-
-
-def make_type_translate(input_deck):
-    global translate
-    translate = into_dtype([("values", float64, (3,))])
 
 
 def make_type_group_array(input_deck):

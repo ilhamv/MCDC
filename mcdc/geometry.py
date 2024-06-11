@@ -79,14 +79,15 @@ def get_cell(particle, universe_ID, mcdc):
     Find and return particle cell ID in the given universe
     """
     universe = mcdc["universes"][universe_ID]
-    for cell_ID in universe["cell_IDs"]:
+    N_cell = universe['N_cell']
+    for i in range(N_cell):
+        cell_ID = universe["cell_IDs"][i]
         cell = mcdc["cells"][cell_ID]
         if check_cell(particle, cell, mcdc):
             return cell["ID"]
 
     # Particle is not found
     print("A particle is lost at (", particle["x"], particle["y"], particle["z"], ")")
-    print("    Locally: (", particle["x_local"], particle["y_local"], particle["z_local"], ")")
 
     particle["alive"] = False
     return -1
@@ -344,9 +345,10 @@ def surface_distance(P, surface, mcdc):
         d_max = (t_max - P["t"]) * v
 
         div = G * ux + H * uy + I_ * uz + J1 / v
-        distance = -surface_evaluate(P, surface) / (
-            G * ux + H * uy + I_ * uz + J1 / v
-        )
+        if div == 0.0:
+            return INF, surface_move
+
+        distance = -surface_evaluate(P, surface) / div
 
         # Go beyond current movement slice?
         if distance > d_max:

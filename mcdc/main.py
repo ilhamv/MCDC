@@ -1452,10 +1452,16 @@ def closeout(mcdc):
 def visualize(vis_type, x=0.0, y=0.0, z=0.0, pixels=(100, 100), colors=None):
     data, mcdc = prepare()
 
-    new_colors = {}
-    for item in colors.items():
-        new_colors[item[0].ID] = mpl_colors.to_rgb(item[1])
-    colors = new_colors
+    if colors is not None:
+        new_colors = {}
+        for item in colors.items():
+            new_colors[item[0].ID] = mpl_colors.to_rgb(item[1])
+        colors = new_colors
+    else:
+        colors = {}
+        for i in range(len(mcdc['materials'])):
+            colors[i] = plt.cm.Set1(i)[:-1]
+    WHITE = mpl_colors.to_rgb('white')
 
     # Set reference axis
     for axis in ['x', 'y', 'z']:
@@ -1500,19 +1506,30 @@ def visualize(vis_type, x=0.0, y=0.0, z=0.0, pixels=(100, 100), colors=None):
     P = np.zeros(1, dtype=type_.particle)[0]
 
     P[reference_key] = reference
+    P['g'] = 0
+    P['E'] = 1E6
     for i in range(pixels[0]):
         P[first_key] = first_midpoint[i]
         for j in range(pixels[1]):
+            print(i,j)
             P[second_key] = second_midpoint[j]
 
             geometry.reset_local_coordinate(P)
             P['cell_ID'] = geometry.get_cell(P, 0, mcdc)
+            if P['cell_ID'] == -1:
+                data[i,j] = WHITE
+                print('LOST')
+                #input()
+                continue
+
             kernel.distance_to_boundary(P, mcdc)
 
             data[i,j] = colors[P['material_ID']]
+            #input()
 
     data = np.transpose(data, (1, 0, 2))
     plt.imshow(data, origin='lower', extent=first + second)
-    plt.xlabel(first_key)
-    plt.ylabel(second_key)
+    plt.xlabel(first_key + " cm")
+    plt.ylabel(second_key+ " cm")
+    plt.title(reference_key + " = %.2f cm"%reference)
     plt.show()

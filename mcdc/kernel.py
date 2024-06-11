@@ -1535,32 +1535,40 @@ def move_particle(P, distance, mcdc):
     P["t"] += distance / get_particle_speed(P, mcdc)
 
     # Also move locally
-    P["x_local"] += P["ux"] * distance
-    P["y_local"] += P["uy"] * distance
-    P["z_local"] += P["uz"] * distance
+    P["x_local"] += P["ux_local"] * distance
+    P["y_local"] += P["uy_local"] * distance
+    P["z_local"] += P["uz_local"] * distance
 
 
 @njit
 def shift_particle(P, shift):
     if P["ux"] > 0.0:
         P["x"] += shift
-        P["x_local"] += shift
     else:
         P["x"] -= shift
-        P["x_local"] -= shift
     if P["uy"] > 0.0:
         P["y"] += shift
-        P["y_local"] += shift
     else:
         P["y"] -= shift
-        P["y_local"] -= shift
     if P["uz"] > 0.0:
         P["z"] += shift
-        P["z_local"] += shift
     else:
         P["z"] -= shift
-        P["z_local"] -= shift
     P["t"] += shift
+
+    # Also update locally
+    if P["ux_local"] > 0.0:
+        P["x_local"] += shift
+    else:
+        P["x_local"] -= shift
+    if P["uy_local"] > 0.0:
+        P["y_local"] += shift
+    else:
+        P["y_local"] -= shift
+    if P["uz_local"] > 0.0:
+        P["z_local"] += shift
+    else:
+        P["z_local"] -= shift
 
 
 @njit
@@ -2387,9 +2395,9 @@ def distance_to_lattice(P, lattice):
     x = P["x_local"]
     y = P["y_local"]
     z = P["z_local"]
-    ux = P["ux"]
-    uy = P["uy"]
-    uz = P["uz"]
+    ux = P["ux_local"]
+    uy = P["uy_local"]
+    uz = P["uz_local"]
 
     d = INF
     d = min(d, mesh_uniform_distance_search(x, ux, mesh["x0"], mesh["dx"]))

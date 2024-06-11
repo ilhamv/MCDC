@@ -86,6 +86,7 @@ def get_cell(particle, universe_ID, mcdc):
 
     # Particle is not found
     print("A particle is lost at (", particle["x"], particle["y"], particle["z"], ")")
+    print("    Locally: (", particle["x_local"], particle["y_local"], particle["z_local"], ")")
 
     particle["alive"] = False
     return -1
@@ -226,23 +227,28 @@ def surface_bc(P, surface):
 @nb.njit
 def surface_reflect(P, surface):
     # TODO: consider rotated universe
-    ux = P["ux"]
-    uy = P["uy"]
-    uz = P["uz"]
+    ux = P["ux_local"]
+    uy = P["uy_local"]
+    uz = P["uz_local"]
     nx, ny, nz = surface_normal(P, surface)
     # 2.0*surface_normal_component(...)
     c = 2.0 * (nx * ux + ny * uy + nz * uz)
 
-    P["ux"] = ux - c * nx
-    P["uy"] = uy - c * ny
-    P["uz"] = uz - c * nz
+    P["ux_local"] = ux - c * nx
+    P["uy_local"] = uy - c * ny
+    P["uz_local"] = uz - c * nz
+
+    # Also update global coordinate
+    P["ux"] -= c * nx
+    P["uy"] -= c * ny
+    P["uz"] -= c * nz
 
 
 @nb.njit
 def surface_shift(P, surface, mcdc):
-    ux = P["ux"]
-    uy = P["uy"]
-    uz = P["uz"]
+    ux = P["ux_local"]
+    uy = P["uy_local"]
+    uz = P["uz_local"]
 
     # Get surface normal
     nx, ny, nz = surface_normal(P, surface)
@@ -309,18 +315,18 @@ def surface_normal(P, surface):
 
 @nb.njit
 def surface_normal_component(P, surface):
-    ux = P["ux"]
-    uy = P["uy"]
-    uz = P["uz"]
+    ux = P["ux_local"]
+    uy = P["uy_local"]
+    uz = P["uz_local"]
     nx, ny, nz = surface_normal(P, surface)
     return nx * ux + ny * uy + nz * uz
 
 
 @nb.njit
 def surface_distance(P, surface, mcdc):
-    ux = P["ux"]
-    uy = P["uy"]
-    uz = P["uz"]
+    ux = P["ux_local"]
+    uy = P["uy_local"]
+    uz = P["uz_local"]
 
     G = surface["G"]
     H = surface["H"]

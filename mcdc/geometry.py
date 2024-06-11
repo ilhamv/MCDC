@@ -415,5 +415,3 @@ def surface_distance(P, surface, mcdc):
 
         # Return the smaller root
         return min(root_1, root_2), surface_move
-
-

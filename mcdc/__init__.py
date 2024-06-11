@@ -22,5 +22,4 @@ from mcdc.input_ import (
     domain_decomposition,
 )
 import mcdc.tally
-from mcdc.main import run, prepare
-from mcdc.visualizer import visualize
+from mcdc.main import run, prepare, visualize

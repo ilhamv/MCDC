@@ -1,5 +1,7 @@
 import argparse, os, sys, math
 import numba as nb
+import matplotlib.pyplot as plt
+from matplotlib import colors as mpl_colors
 
 # Parse command-line arguments
 #   TODO: Will be inside run() once Python/Numba adapter is integrated
@@ -96,6 +98,7 @@ from mcdc.loop import (
     set_cache,
     build_gpu_progs,
 )
+import mcdc.geometry as geometry
 import mcdc.loop as loop
 from mcdc.print_ import print_banner, print_msg, print_runtime, print_header_eigenvalue
 
@@ -1439,3 +1442,77 @@ def closeout(mcdc):
 
     print_runtime(mcdc)
     input_deck.reset()
+
+
+# ======================================================================================
+# Visualize geometry
+# ======================================================================================
+
+
+def visualize(vis_type, x=0.0, y=0.0, z=0.0, pixels=(100, 100), colors=None):
+    data, mcdc = prepare()
+
+    new_colors = {}
+    for item in colors.items():
+        new_colors[item[0].ID] = mpl_colors.to_rgb(item[1])
+    colors = new_colors
+
+    # Set reference axis
+    for axis in ['x', 'y', 'z']:
+        if axis not in vis_type:
+            reference_key = axis
+
+    if reference_key == 'x':
+        reference = x
+    elif reference_key == 'y':
+        reference = y
+    elif reference_key == 'z':
+        reference = z
+
+    # Set first and second axis
+    first_key = vis_type[0]
+    second_key = vis_type[1]
+
+    if first_key == 'x':
+        first = x
+    elif first_key == 'y':
+        first = y
+    elif first_key == 'z':
+        first = z
+
+    if second_key == 'x':
+        second = x
+    elif second_key == 'y':
+        second = y
+    elif second_key == 'z':
+        second = z
+
+    d_first = (first[1] - first[0]) / pixels[0]
+    d_second = (second[1] - second[0]) / pixels[1]
+
+    first_grid = np.linspace(first[0], first[1], pixels[0] + 1)
+    first_midpoint = 0.5 * (first_grid[1:] + first_grid[:-1])
+
+    second_grid = np.linspace(second[0], second[1], pixels[1] + 1)
+    second_midpoint = 0.5 * (second_grid[1:] + second_grid[:-1])
+
+    data = np.zeros(pixels + (3,))
+    P = np.zeros(1, dtype=type_.particle)[0]
+
+    P[reference_key] = reference
+    for i in range(pixels[0]):
+        P[first_key] = first_midpoint[i]
+        for j in range(pixels[1]):
+            P[second_key] = second_midpoint[j]
+
+            geometry.reset_local_coordinate(P)
+            P['cell_ID'] = geometry.get_cell(P, 0, mcdc)
+            kernel.distance_to_boundary(P, mcdc)
+
+            data[i,j] = colors[P['material_ID']]
+
+    data = np.transpose(data, (1, 0, 2))
+    plt.imshow(data, origin='lower', extent=first + second)
+    plt.xlabel(first_key)
+    plt.ylabel(second_key)
+    plt.show()

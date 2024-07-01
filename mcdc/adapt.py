@@ -259,6 +259,21 @@ def universal_arrays(target):
     return universal_arrays_inner
 
 
+# =========================================================================
+# Universal variables
+# =========================================================================
+
+
+@for_cpu()
+def make_array(N, type_):
+    return np.zeros(N, dtype=type_)
+
+
+@for_gpu()
+def make_array(N, type_):
+    return cuda.local.array(N, dtype=type_)
+
+
 # =============================================================================
 # GPU Type / Extern Functions Forward Declarations
 # =============================================================================

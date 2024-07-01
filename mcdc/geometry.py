@@ -8,12 +8,13 @@ from mcdc.constant import (
     BC_REFLECTIVE,
     BC_VACUUM,
     INF,
+    PI,
     REGION_HALFSPACE,
     REGION_INTERSECTION,
     REGION_COMPLEMENT,
     REGION_UNION,
     REGION_ALL,
-    SHIFT,
+    SURFACE_COINCIDENT_TOLERANCE,
 )
 
 
@@ -23,49 +24,90 @@ from mcdc.constant import (
 
 
 @nb.njit
-def reset_local_coordinate(particle):
-    """
-    Reset local coordinate so that it is equivalent to the global coordinate
-    """
-    particle["x_local"] = particle["x"]
-    particle["y_local"] = particle["y"]
-    particle["z_local"] = particle["z"]
+def get_local_coordinate(particle):
+    # Global coordinate
+    x = particle['x']
+    y = particle['y']
+    z = particle['z']
 
-    particle["ux_local"] = particle["ux"]
-    particle["uy_local"] = particle["uy"]
-    particle["uz_local"] = particle["uz"]
+    ux = particle['ux']
+    uy = particle['uy']
+    uz = particle['uz']
+
+    # Translate
+    if particle['translated']:
+        translation = particle['translation']
+        x -= translation[0]
+        y -= translation[1]
+        z -= translation[2]
+
+    if not particle['rotated']:
+        return x, y, z, ux, uy, uz
+
+    # Rotation matrix
+    rotation = particle['rotation']
+    xx, xy, xz, yz, yy, yz, zx, zy, zz = rotation_matrix(rotation)
+
+    # Rotate
+    x_local = x * xx + y * xy + z * xz
+    y_local = x * yx + y * yy + z * yz
+    z_local = x * zx + y * zy + z * zz
+
+    ux_local = ux * xx + uy * xy + uz * xz
+    uy_local = ux * yx + uy * yy + uz * yz
+    uz_local = ux * zx + uy * zy + uz * zz
+
+    return x_local, y_local, z_local, ux_local, uy_local, uz_local
 
 
 @nb.njit
-def translate_local_coordinate(particle, translation):
-    """
-    Translate local coordinate wrt the given translation
-    """
-    particle["x_local"] -= translation[0]
-    particle["y_local"] -= translation[1]
-    particle["z_local"] -= translation[2]
+def get_local_position(particle):
+    # Global coordinate
+    x = particle['x']
+    y = particle['y']
+    z = particle['z']
+
+    # Translate
+    if particle['translated']:
+        translation = particle['translation']
+        x -= translation[0]
+        y -= translation[1]
+        z -= translation[2]
+
+    if not particle['rotated']:
+        return x, y, z
+
+    # Rotation matrix
+    rotation = particle['rotation']
+    xx, xy, xz, yz, yy, yz, zx, zy, zz = rotation_matrix(rotation)
+
+    # Rotate
+    x_local = x * xx + y * xy + z * xz
+    y_local = x * yx + y * yy + z * yz
+    z_local = x * zx + y * zy + z * zz
+
+    return x_local, y_local, z_local
 
 
 @nb.njit
-def rotate_local_coordinate(particle, rotation):
-    """
-    Rotate both local coordinate and direction wrt the given rotation
-    """
-    x = particle["x_local"]
-    y = particle["y_local"]
-    z = particle["z_local"]
+def rotation_matrix(rotation):
+    phi = rotation[0] * PI / 180.0
+    theta = rotation[1] * PI / 180.0
+    psi = rotation[2] * PI / 180.0
 
-    particle["x_local"] = x * rotation[0] + y * rotation[1] + z * rotation[2]
-    particle["y_local"] = x * rotation[3] + y * rotation[4] + z * rotation[5]
-    particle["z_local"] = x * rotation[6] + y * rotation[7] + z * rotation[8]
+    xx = math.cos(theta) * math.cos(psi)
+    xy = -math.cos(phi) * math.sin(psi) + math.sin(phi) * math.sin(theta) * math.cos(psi)
+    xz = math.sin(phi) * math.sin(psi) + math.cos(phi) * math.sin(theta) * math.cos(psi)
 
-    ux = particle["ux_local"]
-    uy = particle["uy_local"]
-    uz = particle["uz_local"]
+    yx = math.cos(theta) * math.sin(psi)
+    yy = math.cos(phi) * math.cos(psi) + math.sin(phi) * math.sin(theta) * math.sin(psi)
+    yz = -math.sin(phi) * math.cos(psi) + math.cos(phi) * math.sin(theta) * math.sin(psi)
 
-    particle["ux_local"] = ux * rotation[0] + uy * rotation[1] + uz * rotation[2]
-    particle["uy_local"] = ux * rotation[3] + uy * rotation[4] + uz * rotation[5]
-    particle["uz_local"] = ux * rotation[6] + uy * rotation[7] + uz * rotation[8]
+    zx = -math.sin(theta)
+    zy = math.sin(phi) * math.cos(theta)
+    zz = math.cos(phi) * math.cos(theta)
+
+    return xx, xy, xz, yz, yy, yz, zx, zy, zz
 
 
 # ======================================================================================
@@ -117,12 +159,21 @@ def check_region(particle, region, mcdc):
         positive_side = region["B"]
 
         surface = mcdc["surfaces"][surface_ID]
-        side = surface_evaluate(particle, surface)
+
+        # Local coordinate
+        x, y, z, ux, uy, uz = get_local_coordinate(particle)
+        t = particle['t']
+        result = evaluate_surface(x, y, z, t, surface)
+
+        # Check if coincident
+        if abs(result) < SURFACE_COINCIDENT_TOLERANCE:
+            nx, ny, nz = get_surface_normal(x, y, z, surface)
+            result = nx * ux + ny * uy + nz * uz
 
         if positive_side:
-            if side > 0.0:
+            if result > 0.0:
                 return True
-        elif side < 0.0:
+        elif result < 0.0:
             return True
 
         return False
@@ -178,14 +229,12 @@ def check_region(particle, region, mcdc):
 #   J(t) = J0_i + J1_i*t for t in [t_{i-1}, t_i), t_0 = 0
 
 # TODO: Rename and rorganize into different types
+# TODO: Make moving plane its own type to minimize intrusion
 
 @nb.njit
-def surface_evaluate(P, surface):
-    x = P["x_local"]
-    y = P["y_local"]
-    z = P["z_local"]
-    t = P["t"]
-
+def evaluate_surface(x, y, z, t, surface):
+    """Evaluate the surface equation"""
+    # Linear part
     G = surface["G"]
     H = surface["H"]
     I_ = surface["I"]
@@ -205,6 +254,7 @@ def surface_evaluate(P, surface):
     if surface["linear"]:
         return result
 
+    # Quadratic part
     A = surface["A"]
     B = surface["B"]
     C = surface["C"]
@@ -218,83 +268,33 @@ def surface_evaluate(P, surface):
 
 
 @nb.njit
-def surface_bc(P, surface):
+def apply_boundary_condition(particle, surface):
     if surface["BC"] == BC_VACUUM:
-        P["alive"] = False
+        particle["alive"] = False
     elif surface["BC"] == BC_REFLECTIVE:
-        surface_reflect(P, surface)
+        # Get coordinate
+        x = particle['x']
+        y = particle['y']
+        z = particle['z']
+        ux = particle["ux"]
+        uy = particle["uy"]
+        uz = particle["uz"]
+        # TODO: Consider local coordinate?
+
+        # Get surface normal
+        nx, ny, nz = get_surface_normal(x, y, z, surface)
+
+        # Reflect direction
+        c = 2.0 * (nx * ux + ny * uy + nz * uz)
+        particle["ux"] -= c * nx
+        particle["uy"] -= c * ny
+        particle["uz"] -= c * nz
 
 
 @nb.njit
-def surface_reflect(P, surface):
-    # TODO: consider rotated universe
-    ux = P["ux_local"]
-    uy = P["uy_local"]
-    uz = P["uz_local"]
-    nx, ny, nz = surface_normal(P, surface)
-    # 2.0*surface_normal_component(...)
-    c = 2.0 * (nx * ux + ny * uy + nz * uz)
-
-    P["ux_local"] = ux - c * nx
-    P["uy_local"] = uy - c * ny
-    P["uz_local"] = uz - c * nz
-
-    # Also update global coordinate
-    P["ux"] -= c * nx
-    P["uy"] -= c * ny
-    P["uz"] -= c * nz
-
-
-@nb.njit
-def surface_shift(P, surface, mcdc):
-    ux = P["ux_local"]
-    uy = P["uy_local"]
-    uz = P["uz_local"]
-
-    # Get surface normal
-    nx, ny, nz = surface_normal(P, surface)
-
-    # The shift
-    shift_x = nx * SHIFT
-    shift_y = ny * SHIFT
-    shift_z = nz * SHIFT
-
-    # Get dot product to determine shift sign
-    if surface["linear"]:
-        # Get time indices
-        idx = 0
-        if surface["N_slice"] > 1:
-            idx = binary_search(P["t"], surface["t"][: surface["N_slice"] + 1])
-        J1 = surface["J"][idx][1]
-        v = physics.get_particle_speed(P, mcdc)
-        dot = ux * nx + uy * ny + uz * nz + J1 / v
-    else:
-        dot = ux * nx + uy * ny + uz * nz
-
-    if dot > 0.0:
-        P["x"] += shift_x
-        P["y"] += shift_y
-        P["z"] += shift_z
-        P["x_local"] += shift_x
-        P["y_local"] += shift_y
-        P["z_local"] += shift_z
-    else:
-        P["x"] -= shift_x
-        P["y"] -= shift_y
-        P["z"] -= shift_z
-        P["x_local"] -= shift_x
-        P["y_local"] -= shift_y
-        P["z_local"] -= shift_z
-
-
-@nb.njit
-def surface_normal(P, surface):
+def get_surface_normal(x, y, z, surface):
     if surface["linear"]:
         return surface["nx"], surface["ny"], surface["nz"]
-
-    x = P["x_local"]
-    y = P["y_local"]
-    z = P["z_local"]
 
     A = surface["A"]
     B = surface["B"]
@@ -311,23 +311,15 @@ def surface_normal(P, surface):
     dz = 2 * C * z + E * x + F * y + I_
 
     norm = (dx**2 + dy**2 + dz**2) ** 0.5
+
     return dx / norm, dy / norm, dz / norm
 
 
 @nb.njit
-def surface_normal_component(P, surface):
-    ux = P["ux_local"]
-    uy = P["uy_local"]
-    uz = P["uz_local"]
-    nx, ny, nz = surface_normal(P, surface)
-    return nx * ux + ny * uy + nz * uz
-
-
-@nb.njit
-def surface_distance(P, surface, mcdc):
-    ux = P["ux_local"]
-    uy = P["uy_local"]
-    uz = P["uz_local"]
+def get_surface_distance(particle, surface, mcdc):
+    # Get local coordinate
+    x, y, z, ux, uy, uz = get_local_coordinate(particle)
+    t = particle['t']
 
     G = surface["G"]
     H = surface["H"]
@@ -337,18 +329,24 @@ def surface_distance(P, surface, mcdc):
     if surface["linear"]:
         idx = 0
         if surface["N_slice"] > 1:
-            idx = binary_search(P["t"], surface["t"][: surface["N_slice"] + 1])
+            idx = binary_search(t, surface["t"][: surface["N_slice"] + 1])
         J1 = surface["J"][idx][1]
-        v = physics.get_particle_speed(P, mcdc)
+        v = physics.get_particle_speed(particle, mcdc)
 
         t_max = surface["t"][idx + 1]
-        d_max = (t_max - P["t"]) * v
+        d_max = (t_max - t) * v
 
         div = G * ux + H * uy + I_ * uz + J1 / v
         if div == 0.0:
             return INF, surface_move
 
-        distance = -surface_evaluate(P, surface) / div
+        # Evaluate surface equation
+        result = evaluate_surface(x, y, z, t, surface)
+
+        # Check if coincident
+        if abs(result) < SURFACE_COINCIDENT_TOLERANCE:
+            return INF, False
+        distance = -result / div
 
         # Go beyond current movement slice?
         if distance > d_max:
@@ -363,10 +361,6 @@ def surface_distance(P, surface, mcdc):
             return INF, surface_move
         else:
             return distance, surface_move
-
-    x = P["x_local"]
-    y = P["y_local"]
-    z = P["z_local"]
 
     A = surface["A"]
     B = surface["B"]
@@ -393,7 +387,7 @@ def surface_distance(P, surface, mcdc):
         + H * uy
         + I_ * uz
     )
-    c = surface_evaluate(P, surface)
+    c = evaluate_surface(x, y, z, t, surface)
 
     determinant = b * b - 4.0 * a * c
 

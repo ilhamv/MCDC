@@ -174,22 +174,23 @@ def make_type_particle(input_deck):
         ("ux", float64),
         ("uy", float64),
         ("uz", float64),
-        ("x_local", float64),
-        ("y_local", float64),
-        ("z_local", float64),
-        ("ux_local", float64),
-        ("uy_local", float64),
-        ("uz_local", float64),
         ("g", uint64),
         ("E", float64),
         ("w", float64),
+        ("rng_seed", uint64),
+
+        ("translation", float64, (3,)),
+        ("rotation", float64, (3,)),
+
         ("alive", bool_),
         ("fresh", bool_),
+        ("translated", bool_),
+        ("rotated", bool_),
+
         ("material_ID", int64),
         ("cell_ID", int64),
         ("surface_ID", int64),
         ("event", int64),
-        ("rng_seed", uint64),
     ]
 
     # Get modes
@@ -551,7 +552,7 @@ def make_type_cell(input_deck):
             ("fill_translated", bool_),
             ("fill_rotated", bool_),
             ("translation", float64, (3,)),
-            ("rotation", float64, (9,)),
+            ("rotation", float64, (3,)),
             ("N_surface", int64),
             ("surface_IDs", int64, (Nmax_surface,)),
         ]

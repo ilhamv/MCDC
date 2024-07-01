@@ -72,9 +72,13 @@ INF = 1e10
 PI = math.acos(-1.0)
 PI_SQRT = math.sqrt(PI)
 PI_HALF = PI / 2.0
+BANKMAX = 100  # Default maximum active bank
+
+
+# Geometry
 SHIFT = 1e-10  # To ensure lattice, surface, and mesh crossings
 PREC = 1.0 + 1e-5  # Precision factor to determine if a distance is smaller
-BANKMAX = 100  # Default maximum active bank
+SURFACE_COINCIDENT_TOLERANCE = 1E-12
 
 # Domain Decomp mesh crossing flags
 MESH_X = 0

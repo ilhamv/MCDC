@@ -550,7 +550,7 @@ def prepare():
     N_cell = len(input_deck.cells)
     for i in range(N_cell):
         for name in type_.cell.names:
-            if name not in ["fill_type", "surface_IDs", "rotation", "fill_translated", "fill_rotated"]:
+            if name not in ["fill_type", "surface_IDs", "fill_translated", "fill_rotated"]:
                 copy_field(mcdc["cells"][i], input_deck.cells[i], name)
 
         # Fill type
@@ -565,23 +565,6 @@ def prepare():
         for name in ["surface_IDs"]:
             N = mcdc["cells"][i]["N_surface"]
             mcdc["cells"][i][name][:N] = getattr(input_deck.cells[i], name)
-
-        # Set rotation
-        phi = -input_deck.cells[i].rotation[0] * PI / 180.0
-        theta = -input_deck.cells[i].rotation[1] * PI / 180.0
-        psi = -input_deck.cells[i].rotation[2] * PI / 180.0
-
-        mcdc['cells'][i]['rotation'][0] = math.cos(theta) * math.cos(psi)
-        mcdc['cells'][i]['rotation'][1] = -math.cos(phi) * math.sin(psi) + math.sin(phi) * math.sin(theta) * math.cos(psi)
-        mcdc['cells'][i]['rotation'][2] = math.sin(phi) * math.sin(psi) + math.cos(phi) * math.sin(theta) * math.cos(psi)
-
-        mcdc['cells'][i]['rotation'][3] = math.cos(theta) * math.sin(psi)
-        mcdc['cells'][i]['rotation'][4] = math.cos(phi) * math.cos(psi) + math.sin(phi) * math.sin(theta) * math.sin(psi)
-        mcdc['cells'][i]['rotation'][5] = -math.sin(phi) * math.cos(psi) + math.cos(phi) * math.sin(theta) * math.sin(psi)
-
-        mcdc['cells'][i]['rotation'][6] = -math.sin(theta)
-        mcdc['cells'][i]['rotation'][7] = math.sin(phi) * math.cos(theta)
-        mcdc['cells'][i]['rotation'][8] = math.cos(phi) * math.cos(theta)
 
         # Check if fill is translated or rotated
         for value in mcdc['cells'][i]['translation']:
@@ -1511,25 +1494,22 @@ def visualize(vis_type, x=0.0, y=0.0, z=0.0, pixels=(100, 100), colors=None):
     for i in range(pixels[0]):
         P[first_key] = first_midpoint[i]
         for j in range(pixels[1]):
-            print(i,j)
             P[second_key] = second_midpoint[j]
 
             geometry.reset_local_coordinate(P)
             P['cell_ID'] = geometry.get_cell(P, 0, mcdc)
             if P['cell_ID'] == -1:
                 data[i,j] = WHITE
-                print('LOST')
-                #input()
                 continue
 
             kernel.distance_to_boundary(P, mcdc)
 
             data[i,j] = colors[P['material_ID']]
-            #input()
 
     data = np.transpose(data, (1, 0, 2))
     plt.imshow(data, origin='lower', extent=first + second)
     plt.xlabel(first_key + " cm")
     plt.ylabel(second_key+ " cm")
     plt.title(reference_key + " = %.2f cm"%reference)
+    plt.savefig('visual.png')
     plt.show()

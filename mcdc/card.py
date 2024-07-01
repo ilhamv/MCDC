@@ -189,6 +189,10 @@ class UniverseCard(InputCard):
         self.N_cell = N_cell
         self.cell_IDs = np.zeros(N_cell, dtype=int)
 
+    def add_cells(self, cells):
+        self.N_cell += len(cells)
+        self.cell_IDs = np.append(self.cell_IDs, np.array([cell.ID for cell in cells], dtype=int))
+
 
 class LatticeCard(InputCard):
     def __init__(self):

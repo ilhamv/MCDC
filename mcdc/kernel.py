@@ -1534,11 +1534,6 @@ def move_particle(P, distance, mcdc):
     P["z"] += P["uz"] * distance
     P["t"] += distance / get_particle_speed(P, mcdc)
 
-    # Also move locally
-    P["x_local"] += P["ux_local"] * distance
-    P["y_local"] += P["uy_local"] * distance
-    P["z_local"] += P["uz_local"] * distance
-
 
 @njit
 def shift_particle(P, shift):
@@ -1556,20 +1551,6 @@ def shift_particle(P, shift):
         P["z"] -= shift
     P["t"] += shift
 
-    # Also update locally
-    if P["ux_local"] > 0.0:
-        P["x_local"] += shift
-    else:
-        P["x_local"] -= shift
-    if P["uy_local"] > 0.0:
-        P["y_local"] += shift
-    else:
-        P["y_local"] -= shift
-    if P["uz_local"] > 0.0:
-        P["z_local"] += shift
-    else:
-        P["z_local"] -= shift
-
 
 @njit
 def get_particle_material(P, mcdc):
@@ -1577,7 +1558,8 @@ def get_particle_material(P, mcdc):
     cell = mcdc["cells"][P["cell_ID"]]
 
     # Reset local coordinate
-    geometry.reset_local_coordinate(P)
+    P['translated'] = False
+    P['rotated'] = False
 
     # Recursively check if cell is a lattice cell, until material cell is found
     while True:
@@ -1589,9 +1571,11 @@ def get_particle_material(P, mcdc):
 
             # Apply translation and rotation
             if cell['fill_translated']:
-                geometry.translate_local_coordinate(P, cell['translation'])
+                P['translation'] += cell['translation']
+                P['translated'] = True
             if cell['fill_rotated']:
-                geometry.rotate_local_coordinate(P, cell['rotation'])
+                P['rotation'] += cell['rotation']
+                P['rotated'] = True
 
             if cell["fill_type"] == FILL_UNIVERSE:
                 universe_ID = cell['fill_ID']
@@ -1610,9 +1594,10 @@ def get_particle_material(P, mcdc):
                 universe_ID = lattice["universe_IDs"][x, y, z]
 
                 # Lattice-translate the particle
-                P['x_local'] -= mesh["x0"] + (x + 0.5) * mesh["dx"]
-                P['y_local'] -= mesh["y0"] + (y + 0.5) * mesh["dy"]
-                P['z_local'] -= mesh["z0"] + (z + 0.5) * mesh["dz"]
+                P['translation'][0] += mesh["x0"] + (x + 0.5) * mesh["dx"]
+                P['translation'][1] += mesh["y0"] + (y + 0.5) * mesh["dy"]
+                P['translation'][2] += mesh["z0"] + (z + 0.5) * mesh["dz"]
+                P['translated'] = True
 
                 # Get inner cell
                 cell_ID = geometry.get_cell(P, universe_ID, mcdc)
@@ -1721,12 +1706,19 @@ def mesh_distance_search(value, direction, grid):
 
 
 @njit
-def mesh_uniform_distance_search(value, direction, x0, dx):
+def mesh_uniform_distance_search(value, direction, x0, dx, Nx):
     if direction == 0.0:
         return INF
     idx = math.floor((value - x0) / dx)
     if direction > 0.0:
         idx += 1
+
+    # Cases for coincidences
+    if idx == -1:
+        return INF
+    elif idx == Nx:
+        return INF
+
     ref = x0 + idx * dx
     dist = (ref - value) / direction
     return dist
@@ -1790,12 +1782,16 @@ def mesh_get_energy_index(P, mesh, mode_MG):
 
 @njit
 def mesh_uniform_get_index(P, mesh):
-    Px = P["x_local"]
-    Py = P["y_local"]
-    Pz = P["z_local"]
+    Px, Py, Pz = geometry.get_local_position(P)
     x = numba.int64(math.floor((Px - mesh["x0"]) / mesh["dx"]))
     y = numba.int64(math.floor((Py - mesh["y0"]) / mesh["dy"]))
     z = numba.int64(math.floor((Pz - mesh["z0"]) / mesh["dz"]))
+
+    # In case of coincidences:
+    x = min(mesh['Nx'], max(0, x))
+    y = min(mesh['Ny'], max(0, y))
+    z = min(mesh['Nz'], max(0, z))
+
     return x, y, z
 
 
@@ -1883,8 +1879,19 @@ def score_surface_tally(P, surface, tally, data, mcdc):
     # The tally index
     idx = stride["tally"]
 
+    # Get coordinate
+    x = P["x"]
+    y = P["y"]
+    z = P["z"]
+    ux = P["ux"]
+    uy = P["uy"]
+    uz = P["uz"]
+    local = False
+    # TODO: Consider local coordinate?
+
     # Flux
-    mu = geometry.surface_normal_component(P, surface)
+    nx, ny, nz = geometry.get_surface_normal(x, y, z, surface)
+    mu = nx * ux + ny * uy + nz * uz
     flux = P["w"] / abs(mu)
 
     # Score
@@ -2304,7 +2311,8 @@ def distance_to_boundary(P, mcdc):
     cell = mcdc["cells"][P["cell_ID"]]
 
     # Reset local coordinate
-    geometry.reset_local_coordinate(P)
+    P['translated'] = False
+    P['rotated'] = False
 
     # Recursively check if cell is a lattice cell, until material cell is found
     while True:
@@ -2331,9 +2339,11 @@ def distance_to_boundary(P, mcdc):
 
             # Apply translation and rotation
             if cell['fill_translated']:
-                geometry.translate_local_coordinate(P, cell['translation'])
+                P['translation'] += cell['translation']
+                P['translated'] = True
             if cell['fill_rotated']:
-                geometry.rotate_local_coordinate(P, cell['rotation'])
+                P['rotation'] += cell['rotation']
+                P['rotated'] = True
 
             if cell["fill_type"] == FILL_UNIVERSE:
                 universe_ID = cell['fill_ID']
@@ -2361,9 +2371,10 @@ def distance_to_boundary(P, mcdc):
                 universe_ID = lattice["universe_IDs"][x, y, z]
 
                 # Lattice-translate the particle
-                P['x_local'] -= mesh["x0"] + (x + 0.5) * mesh["dx"]
-                P['y_local'] -= mesh["y0"] + (y + 0.5) * mesh["dy"]
-                P['z_local'] -= mesh["z0"] + (z + 0.5) * mesh["dz"]
+                P['translation'][0] += mesh["x0"] + (x + 0.5) * mesh["dx"]
+                P['translation'][1] += mesh["y0"] + (y + 0.5) * mesh["dy"]
+                P['translation'][2] += mesh["z0"] + (z + 0.5) * mesh["dz"]
+                P['translated'] = True
 
                 # Get inner cell
                 cell_ID = geometry.get_cell(P, universe_ID, mcdc)
@@ -2380,7 +2391,7 @@ def distance_to_nearest_surface(P, cell, mcdc):
 
     for i in range(cell["N_surface"]):
         surface = mcdc["surfaces"][cell["surface_IDs"][i]]
-        d, sm = geometry.surface_distance(P, surface, mcdc)
+        d, sm = geometry.get_surface_distance(P, surface, mcdc)
         if d < distance:
             distance = d
             surface_ID = surface["ID"]
@@ -2390,19 +2401,13 @@ def distance_to_nearest_surface(P, cell, mcdc):
 
 @njit
 def distance_to_lattice(P, lattice):
+    x, y, z, ux, uy, uz = geometry.get_local_coordinate(P)
     mesh = lattice["mesh"]
 
-    x = P["x_local"]
-    y = P["y_local"]
-    z = P["z_local"]
-    ux = P["ux_local"]
-    uy = P["uy_local"]
-    uz = P["uz_local"]
-
     d = INF
-    d = min(d, mesh_uniform_distance_search(x, ux, mesh["x0"], mesh["dx"]))
-    d = min(d, mesh_uniform_distance_search(y, uy, mesh["y0"], mesh["dy"]))
-    d = min(d, mesh_uniform_distance_search(z, uz, mesh["z0"], mesh["dz"]))
+    d = min(d, mesh_uniform_distance_search(x, ux, mesh["x0"], mesh["dx"], mesh['Nx']))
+    d = min(d, mesh_uniform_distance_search(y, uy, mesh["y0"], mesh["dy"], mesh['Ny']))
+    d = min(d, mesh_uniform_distance_search(z, uz, mesh["z0"], mesh["dz"], mesh['Nz']))
     return d
 
 
@@ -2464,18 +2469,14 @@ def surface_crossing(P, data, prog):
         tally = mcdc["surface_tallies"][ID]
         score_surface_tally(P, surface, tally, data, mcdc)
 
-    # Implement BC
-    geometry.surface_bc(P, surface)
-
-    # Small shift to ensure crossing
-    geometry.surface_shift(P, surface, mcdc)
+    # Apply BC
+    geometry.apply_boundary_condition(P, surface)
 
     # Check new cell?
     if P["alive"] and not surface["BC"] == BC_REFLECTIVE:
-        cell = mcdc["cells"][P["cell_ID"]]
-        if not geometry.check_cell(P, cell, mcdc):
-            geometry.reset_local_coordinate(P)
-            P["cell_ID"] = geometry.get_cell(P, UNIVERSE_ROOT, mcdc)
+        P['translated'] = False
+        P['rotated'] = False
+        P["cell_ID"] = geometry.get_cell(P, UNIVERSE_ROOT, mcdc)
 
 
 # =============================================================================
@@ -3555,7 +3556,8 @@ def iqmc_generate_material_idx(mcdc):
                     P_temp["z"] = z
 
                     # set cell_ID
-                    geometry.reset_local_coordinate(P_temp)
+                    P_temp['translated'] = False
+                    P_temp['rotated'] = False
                     P_temp["cell_ID"] = geometry.get_cell(
                         P_temp, UNIVERSE_ROOT, mcdc
                     )

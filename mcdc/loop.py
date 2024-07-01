@@ -466,7 +466,8 @@ def step_particle(P, data, prog):
 
     # Find cell from root universe if unknown
     if P["cell_ID"] == -1:
-        geometry.reset_local_coordinate(P)
+        P['translated'] = False
+        P['rotated'] = False
         P["cell_ID"] = geometry.get_cell(P, UNIVERSE_ROOT, mcdc)
 
     # Determine and move to event
@@ -822,7 +823,8 @@ def generate_precursor_particle(DNP, particle_idx, seed_work, prog):
     P_new["z"] = DNP["z"]
 
     # Get material
-    geometry.reset_local_coordinate(P_new)
+    P['translated'] = False
+    P['rotated'] = False
     P_new["cell_ID"] = geometry.get_cell(P_new, UNIVERSE_ROOT, mcdc)
     material_ID = kernel.get_particle_material(P_new, mcdc)
     material = mcdc["materials"][material_ID]

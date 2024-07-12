@@ -23,5 +23,5 @@ from mcdc.input_ import (
     reset,
     domain_decomposition,
 )
-from mcdc.main import run, prepare
+from mcdc.main import run
 from mcdc.visualizer import visualize

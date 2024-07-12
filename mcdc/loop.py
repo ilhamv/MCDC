@@ -22,17 +22,6 @@ from mcdc.print_ import (
     print_msg,
 )
 
-caching = True
-
-
-def set_cache(setting):
-    caching = setting
-
-    if setting == False:
-        print_msg(" Caching has been disabled")
-        # p.unlink() for p in pathlib.Path('.').rglob('*.py[co]')
-        # p.rmdir() for p in pathlib.Path('.').rglob('__pycache__')
-
 
 # =============================================================================
 # Functions for GPU Interop

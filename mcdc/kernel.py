@@ -9,7 +9,6 @@ import mcdc.type_ as type_
 from mcdc.constant import *
 from mcdc.print_ import print_error, print_msg
 from mcdc.type_ import score_list
-from mcdc.loop import loop_source
 import mcdc.adapt as adapt
 from mcdc.adapt import toggle, for_cpu, for_gpu
 
@@ -757,93 +756,6 @@ def sample_piecewise_linear(cdf, P):
     y1 = cdf[0, idx]
     y2 = cdf[0, idx + 1]
     return y1 + (xi - x1) * (y2 - y1) / (x2 - x1)
-
-
-# =============================================================================
-# Random number generator
-#   LCG with hash seed-split
-# =============================================================================
-
-
-@njit
-def wrapping_mul(a, b):
-    return a * b
-
-
-@njit
-def wrapping_add(a, b):
-    return a + b
-
-
-def wrapping_mul_python(a, b):
-    a = numba.uint64(a)
-    b = numba.uint64(b)
-    with np.errstate(all="ignore"):
-        return a * b
-
-
-def wrapping_add_python(a, b):
-    a = numba.uint64(a)
-    b = numba.uint64(b)
-    with np.errstate(all="ignore"):
-        return a + b
-
-
-def adapt_rng(object_mode=False):
-    global wrapping_add, wrapping_mul
-    if object_mode:
-        wrapping_add = wrapping_add_python
-        wrapping_mul = wrapping_mul_python
-
-
-@njit
-def split_seed(key, seed):
-    """murmur_hash64a"""
-    multiplier = numba.uint64(0xC6A4A7935BD1E995)
-    length = numba.uint64(8)
-    rotator = numba.uint64(47)
-    key = numba.uint64(key)
-    seed = numba.uint64(seed)
-
-    hash_value = numba.uint64(seed) ^ wrapping_mul(length, multiplier)
-
-    key = wrapping_mul(key, multiplier)
-    key ^= key >> rotator
-    key = wrapping_mul(key, multiplier)
-    hash_value ^= key
-    hash_value = wrapping_mul(hash_value, multiplier)
-
-    hash_value ^= hash_value >> rotator
-    hash_value = wrapping_mul(hash_value, multiplier)
-    hash_value ^= hash_value >> rotator
-    return hash_value
-
-
-@njit
-def rng_(seed):
-    seed = numba.uint64(seed)
-    return wrapping_add(wrapping_mul(RNG_G, seed), RNG_C) & RNG_MOD_MASK
-
-
-@njit
-def rng(state):
-    state["rng_seed"] = rng_(state["rng_seed"])
-    return state["rng_seed"] / RNG_MOD
-
-
-@njit
-def rng_from_seed(seed):
-    return rng_(seed) / RNG_MOD
-
-
-@njit
-def rng_array(seed, shape, size):
-    xi = np.zeros(size)
-    for i in range(size):
-        xi_seed = split_seed(i, seed)
-        xi[i] = rng_from_seed(xi_seed)
-    xi = xi.reshape(shape)
-    return xi
 
 
 # =============================================================================
@@ -4394,3 +4306,165 @@ def uq_score_closeout(name, mcdc):
     score["sdev"][:] = np.sqrt(
         (score["sdev"] / N_history - np.square(score["mean"])) / (N_history - 1)
     )
+
+
+# =============================================================================
+# Seperate GPU/CPU Functions to Target Different Platforms
+# =============================================================================
+
+
+@for_cpu()
+def device(prog):
+    return prog
+
+
+@for_gpu()
+def device(prog):
+    return device_gpu(prog)
+
+
+@for_cpu()
+def group(prog):
+    return prog
+
+
+@for_gpu()
+def group(prog):
+    return group_gpu(prog)
+
+
+@for_cpu()
+def thread(prog):
+    return prog
+
+
+@for_gpu()
+def thread(prog):
+    return thread_gpu(prog)
+
+
+@for_cpu()
+def add_active(particle, prog):
+    kernel.add_particle(particle, prog["bank_active"])
+
+
+@for_gpu()
+def add_active(particle, prog):
+    P = kernel.recordlike_to_particle(particle)
+    if SIMPLE_ASYNC:
+        step_async(prog, P)
+    else:
+        find_cell_async(prog, P)
+
+
+@for_cpu()
+def add_source(particle, prog):
+    kernel.add_particle(particle, prog["bank_source"])
+
+
+@for_gpu()
+def add_source(particle, prog):
+    mcdc = device(prog)
+    kernel.add_particle(particle, mcdc["bank_source"])
+
+
+@for_cpu()
+def add_census(particle, prog):
+    kernel.add_particle(particle, prog["bank_census"])
+
+
+@for_gpu()
+def add_census(particle, prog):
+    mcdc = device(prog)
+    kernel.add_particle(particle, mcdc["bank_census"])
+
+
+@for_cpu()
+def add_IC(particle, prog):
+    kernel.add_particle(particle, prog["technique"]["IC_bank_neutron_local"])
+
+
+@for_gpu()
+def add_IC(particle, prog):
+    mcdc = device(prog)
+    kernel.add_particle(particle, mcdc["technique"]["IC_bank_neutron_local"])
+
+
+@for_cpu()
+def local_translate():
+    return np.zeros(1, dtype=type_.translate)[0]
+
+
+@for_gpu()
+def local_translate():
+    trans = cuda.local.array(1, type_.translate)[0]
+    for i in range(3):
+        trans["values"][i] = 0
+    return trans
+
+
+@for_cpu()
+def local_group_array():
+    return np.zeros(1, dtype=type_.group_array)[0]
+
+
+@for_gpu()
+def local_group_array():
+    return cuda.local.array(1, type_.group_array)[0]
+
+
+@for_cpu()
+def local_j_array():
+    return np.zeros(1, dtype=type_.j_array)[0]
+
+
+@for_gpu()
+def local_j_array():
+    return cuda.local.array(1, type_.j_array)[0]
+
+
+@for_cpu()
+def local_particle():
+    return np.zeros(1, dtype=type_.particle)[0]
+
+
+@for_gpu()
+def local_particle():
+    return cuda.local.array(1, dtype=type_.particle)[0]
+
+
+@for_cpu()
+def local_particle_record():
+    return np.zeros(1, dtype=type_.particle_record)[0]
+
+
+@for_gpu()
+def local_particle_record():
+    return cuda.local.array(1, dtype=type_.particle_record)[0]
+
+
+@for_cpu()
+def global_add(ary, idx, val):
+    result = ary[idx]
+    ary[idx] += val
+    return result
+
+
+@for_gpu()
+def global_add(ary, idx, val):
+    return cuda.atomic.add(ary, idx, val)
+
+
+@for_cpu()
+def global_max(ary, idx, val):
+    result = ary[idx]
+    if ary[idx] < val:
+        ary[idx] = val
+    return result
+
+
+@for_gpu()
+def global_max(ary, idx, val):
+    return cuda.atomic.max(ary, idx, val)
+
+

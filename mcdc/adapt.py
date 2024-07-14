@@ -63,8 +63,6 @@ gpu_unsupported_rosters = []
 
 target_rosters = {}
 
-late_jit_roster = set()
-
 do_nothing_id = 0
 
 
@@ -123,30 +121,6 @@ def eval_toggle():
                 overwrite_func(func, numba.njit(generate_do_nothing(arg_count)))
 
 
-blankout_roster = {}
-
-
-def blankout_fn(func):
-    global blankout_roster
-
-    mod_name = func.__module__
-    fn_name = func.__name__
-    id = (mod_name, fn_name)
-
-    if id not in blankout_roster:
-        global do_nothing_id
-        name = func.__name__
-        # print(f"do_nothing_{do_nothing_id} for {name}")
-        arg_count = len(inspect.signature(func).parameters)
-        blankout_roster[id] = generate_do_nothing(
-            arg_count, crash_on_call=f"blankout fn for {name} should never be called"
-        )
-
-    blank = blankout_roster[id]
-
-    return blank
-
-
 def for_(target, on_target=[]):
     # print(f"{target}")
     def for_inner(func):
@@ -177,46 +151,6 @@ def for_cpu(on_target=[]):
 
 def for_gpu(on_target=[]):
     return for_("gpu", on_target=on_target)
-
-
-def jit_on_target():
-    def jit_on_target_inner(func):
-        late_jit_roster.add(func)
-        return func
-
-    return jit_on_target_inner
-
-
-def nopython_mode(is_on):
-    if is_on:
-        return
-    if not isinstance(target_rosters["cpu"], dict):
-        return
-
-    for impl in target_rosters["cpu"].values():
-        overwrite_func(impl, impl)
-
-
-# Function adapted from Phillip Eller's `myjit` solution to the GPU/CPU array
-# problem brought up in https://github.com/numba/numba/issues/2571
-def universal_arrays(target):
-    def universal_arrays_inner(func):
-        if target == "gpu":
-            source = inspect.getsource(func).splitlines()
-            for idx, line in enumerate(source):
-                if "@universal_arrays" in line:
-                    source = "\n".join(source[idx + 1 :]) + "\n"
-                    break
-            source = source.replace("np.empty", "cuda.local.array")
-            # print(source)
-            exec(source)
-            revised_func = eval(func.__name__)
-            overwrite_func(func, revised_func)
-            # module = __import__(func.__module__,fromlist=[func.__name__])
-            # print(inspect.getsource(getattr(module,func.__name__)))
-        return revised_func
-
-    return universal_arrays_inner
 
 
 # =============================================================================
@@ -349,51 +283,3 @@ def make_spec(target):
 @njit
 def empty_base_func(prog):
     pass
-
-
-def make_gpu_loop(
-    state_spec,
-    work_make_fn,
-    step_fn,
-    check_fn,
-    arg_type,
-    initial_fn=empty_base_func,
-    final_fn=empty_base_func,
-):
-    async_fn_list = [step_fn]
-    device_gpu, group_gpu, thread_gpu = harm.RuntimeSpec.access_fns(state_spec)
-
-    def make_work(prog: numba.uintp) -> numba.boolean:
-        return work_make_fn(prog)
-
-    def initialize(prog: numba.uintp):
-        initial_fn(prog)
-
-    def finalize(prog: numba.uintp):
-        final_fn(prog)
-
-    def step(prog: numba.uintp, arg: arg_type):
-
-        step_async()
-
-    (step_async,) = harm.RuntimeSpec.async_dispatch(step)
-
-    pass
-
-
-# =========================================================================
-# Compilation and Main Adapter
-# =========================================================================
-
-
-def compiler(func, target):
-    if target == "cpu":
-        return jit(func, nopython=True, nogil=True)  # , parallel=True)
-    elif target == "cpus":
-        return jit(func, nopython=True, nogil=True, parallel=True)
-    elif target == "gpu_device":
-        return cuda.jit(func, device=True)
-    elif target == "gpu":
-        return cuda.jit(func)
-    else:
-        unknown_target(target)

@@ -22,7 +22,6 @@ def numba_jit(module, input_deck, numba):
     for name in [x for x in dir(module) if not x.startswith("__")]:
         function = getattr(module, name)
         if callable(function):
-            print(name)
             setattr(module, name, numba.njit(function, cache=cache))
 
 

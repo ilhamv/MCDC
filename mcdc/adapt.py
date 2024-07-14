@@ -193,28 +193,6 @@ def for_gpu(on_target=[]):
     return for_("gpu", on_target=on_target)
 
 
-def target_for(target):
-    pass
-
-
-#
-#    for func in late_jit_roster:
-#        if target == 'cpu':
-#            overwrite_func(func,numba.njit)
-#        elif target == 'gpu':
-#            overwrite_func(func,numba.cuda.jit)
-#        else:
-#            unknown_target(target)
-#
-#    for func, on_target in target_rosters[target].items():
-#        transformed = func
-#        for transformer in on_target:
-#            transformed = transformer(transformed)
-#        name = func.__name__
-#        print(f"Overwriting func {name} for target {target}")
-#        overwrite_func(func, transformed)
-
-
 def jit_on_target():
     def jit_on_target_inner(func):
         late_jit_roster.add(func)

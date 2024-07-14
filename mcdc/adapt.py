@@ -4,26 +4,12 @@ from numba.extending import intrinsic
 import numba
 import mcdc.type_ as type_
 
-try:
-    import harmonize as harm
-
-    HAS_HARMONIZE = True
-except:
-    HAS_HARMONIZE = False
 
 import math
 import inspect
 
 from mcdc.print_ import print_error
 
-
-# =============================================================================
-# Error Messangers
-# =============================================================================
-
-
-def unknown_target(target):
-    print_error(f"ERROR: Unrecognized target '{target}'")
 
 
 # =============================================================================
@@ -232,47 +218,6 @@ def universal_arrays(target):
 
     return universal_arrays_inner
 
-
-# =============================================================================
-# GPU Type / Extern Functions Forward Declarations
-# =============================================================================
-
-
-SIMPLE_ASYNC = True
-
-none_type = None
-mcdc_type = None
-state_spec = None
-device_gpu = None
-group_gpu = None
-thread_gpu = None
-particle_gpu = None
-prep_gpu = None
-step_async = None
-find_cell_async = None
-
-
-def gpu_forward_declare():
-
-    global none_type, mcdc_type, state_spec
-    global device_gpu, group_gpu, thread_gpu
-    global particle_gpu, particle_record_gpu
-    global step_async, find_cell_async
-
-    none_type = numba.from_dtype(np.dtype([]))
-    mcdc_type = numba.from_dtype(type_.global_)
-    state_spec = (mcdc_type, none_type, none_type)
-    device_gpu, group_gpu, thread_gpu = harm.RuntimeSpec.access_fns(state_spec)
-    particle_gpu = numba.from_dtype(type_.particle)
-    particle_record_gpu = numba.from_dtype(type_.particle_record)
-
-    def step(prog: numba.uintp, P: particle_gpu):
-        pass
-
-    def find_cell(prog: numba.uintp, P: particle_gpu):
-        pass
-
-    step_async, find_cell_async = harm.RuntimeSpec.async_dispatch(step, find_cell)
 
 
 # =========================================================================

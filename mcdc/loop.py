@@ -41,12 +41,10 @@ pre_init_program, pre_exec_program, pre_complete, pre_clear_flags = [None] * 4
 # If GPU execution is supported and selected, the functions shown below will
 # be redefined to overwrite the above symbols and perform initialization/
 # finalization of GPU state
-@njit
 def setup_gpu(mcdc):
     pass
 
 
-@njit
 def teardown_gpu(mcdc):
     pass
 
@@ -55,13 +53,7 @@ def teardown_gpu(mcdc):
 # Fixed-source loop
 # =========================================================================
 
-# about caching:
-#     it is enabled as a default at the jit call level
-#     to effectivly disable cache, delete the cache folder (often located in /MCDC/mcdc/__pycache__)
-#     see more about cacheing here https://numba.readthedocs.io/en/stable/developer/caching.html
 
-
-@njit(cache=caching)
 def loop_fixed_source(mcdc):
     # Loop over batches
     for idx_batch in range(mcdc["setting"]["N_batch"]):
@@ -126,7 +118,6 @@ def loop_fixed_source(mcdc):
 # =========================================================================
 
 
-@njit(cache=caching)
 def loop_eigenvalue(mcdc):
     # Loop over power iteration cycles
     for idx_cycle in range(mcdc["setting"]["N_cycle"]):
@@ -165,7 +156,6 @@ def loop_eigenvalue(mcdc):
 # =============================================================================
 
 
-@njit(cache=caching)
 def generate_source_particle(work_start, idx_work, seed, prog):
     mcdc = adapt.device(prog)
 
@@ -205,7 +195,6 @@ def generate_source_particle(work_start, idx_work, seed, prog):
             adapt.add_active(P, prog)
 
 
-@njit(cache=caching)
 def prep_particle(P, prog):
     mcdc = adapt.device(prog)
 
@@ -214,7 +203,6 @@ def prep_particle(P, prog):
         kernel.weight_window(P, prog)
 
 
-@njit(cache=caching)
 def exhaust_active_bank(prog):
     mcdc = adapt.device(prog)
     P = adapt.local_particle()
@@ -229,7 +217,6 @@ def exhaust_active_bank(prog):
         loop_particle(P, mcdc)
 
 
-@njit(cache=caching)
 def source_closeout(prog, idx_work, N_prog):
     mcdc = adapt.device(prog)
 
@@ -249,7 +236,6 @@ def source_closeout(prog, idx_work, N_prog):
             print_progress(percent, mcdc)
 
 
-@njit(cache=caching)
 def source_dd_resolution(prog):
     mcdc = adapt.device(prog)
 
@@ -302,7 +288,6 @@ def source_dd_resolution(prog):
             terminated = True
 
 
-@njit
 def loop_source(seed, mcdc):
     # Progress bar indicator
     N_prog = 0
@@ -375,7 +360,6 @@ def gpu_sources_spec():
     return adapt.harm.RuntimeSpec("mcdc_source", adapt.state_spec, base_fns, async_fns)
 
 
-@njit
 def gpu_loop_source(seed, mcdc):
     # Progress bar indicator
     N_prog = 0
@@ -420,7 +404,6 @@ def gpu_loop_source(seed, mcdc):
 # =========================================================================
 
 
-@njit(cache=caching)
 def loop_particle(P, prog):
     mcdc = adapt.device(prog)
 
@@ -428,7 +411,6 @@ def loop_particle(P, prog):
         step_particle(P, prog)
 
 
-@njit(cache=caching)
 def step_particle(P, prog):
     mcdc = adapt.device(prog)
 
@@ -520,7 +502,6 @@ def step_particle(P, prog):
 # =============================================================================
 
 
-@njit(cache=caching)
 def generate_precursor_particle(DNP, particle_idx, seed_work, prog):
     mcdc = adapt.device(prog)
 
@@ -605,7 +586,6 @@ def generate_precursor_particle(DNP, particle_idx, seed_work, prog):
         adapt.add_active(P_new, prog)
 
 
-@njit(cache=caching)
 def source_precursor_closeout(prog, idx_work, N_prog):
     mcdc = adapt.device(prog)
 
@@ -621,7 +601,6 @@ def source_precursor_closeout(prog, idx_work, N_prog):
             print_progress(percent, mcdc)
 
 
-@njit
 def loop_source_precursor(seed, mcdc):
     # TODO: censussed neutrons seeding is still not reproducible
 
@@ -727,7 +706,6 @@ def gpu_precursor_spec():
     )
 
 
-@njit
 def gpu_loop_source_precursor(seed, mcdc):
     # TODO: censussed neutrons seeding is still not reproducible
 

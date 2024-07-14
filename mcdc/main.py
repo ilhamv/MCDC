@@ -8,9 +8,9 @@ import mcdc.adapt as adapt
 import mcdc.code_factory as code_factory
 import mcdc.global_ as global_
 import mcdc.initializer as initializer
+import mcdc.loop as loop
 import mcdc.prep as prep
 import mcdc.rng as rng
-import mcdc.simulation as simulation
 import mcdc.type_ as type_
 
 #from mcdc.iqmc.iqmc_loop import iqmc_simulation
@@ -20,7 +20,6 @@ from mcdc.print_ import (
     print_header_eigenvalue,
     print_msg,
     print_runtime,
-    print_warning,
 )
 
 
@@ -51,7 +50,11 @@ def run():
     # Code factory
     # ==================================================================================
 
+    # ==========
     # Make types
+    # ==========
+
+    # Make types based on the input deck
     type_.make_type_particle(input_deck)
     type_.make_type_particle_record(input_deck)
     type_.make_type_nuclide(input_deck)
@@ -75,20 +78,14 @@ def run():
     type_.make_type_group_array(input_deck)
     type_.make_type_j_array(input_deck)
 
-    # Create the global variable container
-    mcdc = np.zeros(1, dtype=type_.global_)[0]
-
-    # Set Numba-JIT decorator to all functions in selected modules
-    code_factory.numba_jit(rng, input_deck, numba)
-
-    # Set random number generator
-    code_factory.set_rng(rng, input_deck)
-
     # ==============
     # Initialization
     # ==============
 
-    # Simulation objects
+    # Create the global variable container
+    mcdc = np.zeros(1, dtype=type_.global_)[0]
+
+    # Initialize global variables
     initializer.set_nuclides(mcdc, input_deck)
     initializer.set_materials(mcdc, input_deck)
     initializer.set_surfaces(mcdc, input_deck)
@@ -121,52 +118,61 @@ def run():
     # Specials
     initializer.set_iQMC(mcdc, input_deck)
 
-    # ==========================================
-    # Platform Targeting, Adapters, Toggles, etc
-    # ==========================================
+    # ===============
+    # Adapt functions
+    # ===============
 
-    target = input_deck.setting['hardware_target']
-    if target == "gpu":
-        if not adapt.HAS_HARMONIZE:
-            print_error(
-                "No module named 'harmonize' - GPU functionality not available. "
-            )
-        adapt.gpu_forward_declare()
+    # Set Numba-JIT decorator to all functions in selected modules
+    code_factory.numba_jit(rng, input_deck, numba)
+    code_factory.numba_jit(loop, input_deck, numba)
+
+    # Set random number generator
+    code_factory.set_rng(rng, input_deck)
+
+    # ===============
+    # GPU mode set up
+    # ===============
+    '''
+    gpu_mode = input_deck.setting['hardware_target'] == 'gpu'
+
+    if gpu_mode:
+        code_factory.gpu_forward_declare()
 
     adapt.set_toggle("iQMC", input_deck.technique["iQMC"])
     adapt.set_toggle("domain_decomp", input_deck.technique["domain_decomposition"])
     adapt.eval_toggle()
-    adapt.target_for(target)
 
     if target == "gpu":
         build_gpu_progs()
 
     adapt.nopython_mode(input_deck.setting['numba_jit'])
 
-    loop.setup_gpu(mcdc)
+    code_factory.setup_gpu(mcdc)
+    '''
 
-   # Hit timer
+    # Hit timer
     mcdc["runtime_preparation"] = MPI.Wtime() - total_start
 
     # ==================================================================================
-    # Run simulatthe simulation
+    # Run simulation
     # ==================================================================================
+
+    # Start timer
+    simulation_start = MPI.Wtime()
 
     # Print banner, hardware configuration, and header
     print_banner(mcdc)
-
     print_msg(" Now running TNT...")
     if mcdc["setting"]["mode_eigenvalue"]:
         print_header_eigenvalue(mcdc)
 
     # Run simulation
-    simulation_start = MPI.Wtime()
     if mcdc["technique"]["iQMC"]:
         iqmc_simulation(mcdc)
     elif mcdc["setting"]["mode_eigenvalue"]:
-        loop_eigenvalue(mcdc)
+        loop.loop_eigenvalue(mcdc)
     else:
-        simulation.fixed_source(mcdc)
+        loop.loop_fixed_source(mcdc)
     mcdc["runtime_simulation"] = MPI.Wtime() - simulation_start
 
     # Output: generate hdf5 output files

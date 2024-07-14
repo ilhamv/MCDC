@@ -1,11 +1,11 @@
+import numba as nb
 import numpy as np
-from numpy import ascontiguousarray as cga
-from numba import njit, objmode, jit
 
 from mpi4py import MPI
 
 import mcdc.adapt as adapt
 import mcdc.kernel as kernel
+import mcdc.rng as rng
 import mcdc.type_ as type_
 import pathlib
 
@@ -58,28 +58,28 @@ def loop_fixed_source(mcdc):
     # Loop over batches
     for idx_batch in range(mcdc["setting"]["N_batch"]):
         mcdc["idx_batch"] = idx_batch
-        seed_batch = kernel.split_seed(idx_batch, mcdc["setting"]["rng_seed"])
+        seed_batch = rng.split_seed(idx_batch, mcdc["setting"]["rng_seed"])
 
         # Print multi-batch header
         if mcdc["setting"]["N_batch"] > 1:
-            with objmode():
+            with nb.objmode():
                 print_header_batch(mcdc)
             if mcdc["technique"]["uq"]:
-                seed_uq = kernel.split_seed(seed_batch, SEED_SPLIT_UQ)
+                seed_uq = rng.split_seed(seed_batch, SEED_SPLIT_UQ)
                 kernel.uq_reset(mcdc, seed_uq)
 
         # Loop over time censuses
         for idx_census in range(mcdc["setting"]["N_census"]):
             mcdc["idx_census"] = idx_census
-            seed_census = kernel.split_seed(seed_batch, SEED_SPLIT_CENSUS)
+            seed_census = rng.split_seed(seed_batch, SEED_SPLIT_CENSUS)
 
             # Loop over source particles
-            seed_source = kernel.split_seed(seed_census, SEED_SPLIT_SOURCE)
+            seed_source = rng.split_seed(seed_census, SEED_SPLIT_SOURCE)
             loop_source(seed_source, mcdc)
 
             # Loop over source precursors
             if kernel.get_bank_size(mcdc["bank_precursor"]) > 0:
-                seed_source_precursor = kernel.split_seed(
+                seed_source_precursor = rng.split_seed(
                     seed_census, SEED_SPLIT_SOURCE_PRECURSOR
                 )
                 loop_source_precursor(seed_source_precursor, mcdc)
@@ -89,7 +89,7 @@ def loop_fixed_source(mcdc):
                 # TODO: Output tally (optional)
 
                 # Manage particle banks: population control and work rebalance
-                seed_bank = kernel.split_seed(seed_census, SEED_SPLIT_BANK)
+                seed_bank = rng.split_seed(seed_census, SEED_SPLIT_BANK)
                 kernel.manage_particle_banks(seed_bank, mcdc)
 
         # Multi-batch closeout
@@ -121,10 +121,10 @@ def loop_fixed_source(mcdc):
 def loop_eigenvalue(mcdc):
     # Loop over power iteration cycles
     for idx_cycle in range(mcdc["setting"]["N_cycle"]):
-        seed_cycle = kernel.split_seed(idx_cycle, mcdc["setting"]["rng_seed"])
+        seed_cycle = rng.split_seed(idx_cycle, mcdc["setting"]["rng_seed"])
 
         # Loop over source particles
-        seed_source = kernel.split_seed(seed_cycle, SEED_SPLIT_SOURCE)
+        seed_source = rng.split_seed(seed_cycle, SEED_SPLIT_SOURCE)
         loop_source(seed_source, mcdc)
 
         # Tally "history" closeout
@@ -134,11 +134,11 @@ def loop_eigenvalue(mcdc):
             kernel.tally_closeout_history(mcdc)
 
         # Print progress
-        with objmode():
+        with nb.objmode():
             print_progress_eigenvalue(mcdc)
 
         # Manage particle banks
-        seed_bank = kernel.split_seed(seed_cycle, SEED_SPLIT_BANK)
+        seed_bank = rng.split_seed(seed_cycle, SEED_SPLIT_BANK)
         kernel.manage_particle_banks(seed_bank, mcdc)
 
         # Entering active cycle?
@@ -159,7 +159,7 @@ def loop_eigenvalue(mcdc):
 def generate_source_particle(work_start, idx_work, seed, prog):
     mcdc = adapt.device(prog)
 
-    seed_work = kernel.split_seed(work_start + idx_work, seed)
+    seed_work = rng.split_seed(work_start + idx_work, seed)
 
     # =====================================================================
     # Get a source particle and put into active bank
@@ -232,7 +232,7 @@ def source_closeout(prog, idx_work, N_prog):
     percent = (idx_work + 1.0) / mcdc["mpi_work_size"]
     if mcdc["setting"]["progress_bar"] and int(percent * 100.0) > N_prog:
         N_prog += 1
-        with objmode():
+        with nb.objmode():
             print_progress(percent, mcdc)
 
 
@@ -280,7 +280,7 @@ def source_dd_resolution(prog):
         percent = 1 - work_remaining / max_work
         if mcdc["setting"]["progress_bar"] and int(percent * 100.0) > N_prog:
             N_prog += 1
-            with objmode():
+            with nb.objmode():
                 print_progress(percent, mcdc)
         """
         if kernel.dd_check_halt(mcdc):
@@ -511,7 +511,7 @@ def generate_precursor_particle(DNP, particle_idx, seed_work, prog):
 
     # Create new particle
     P_new = adapt.local_particle()
-    part_seed = kernel.split_seed(particle_idx, seed_work)
+    part_seed = rng.split_seed(particle_idx, seed_work)
     P_new["rng_seed"] = part_seed
     P_new["alive"] = True
     P_new["w"] = 1.0
@@ -597,7 +597,7 @@ def source_precursor_closeout(prog, idx_work, N_prog):
     percent = (idx_work + 1.0) / mcdc["mpi_work_size_precursor"]
     if mcdc["setting"]["progress_bar"] and int(percent * 100.0) > N_prog:
         N_prog += 1
-        with objmode():
+        with nb.objmode():
             print_progress(percent, mcdc)
 
 
@@ -628,7 +628,7 @@ def loop_source_precursor(seed, mcdc):
         w = DNP["w"]
         N = math.floor(w)
         # "Roulette" the last particle
-        seed_work = kernel.split_seed(idx_work, seed)
+        seed_work = rng.split_seed(idx_work, seed)
         if kernel.rng_from_seed(seed_work) < w - N:
             N += 1
         DNP["w"] = N
@@ -669,7 +669,7 @@ def gpu_precursor_spec():
         w = DNP["w"]
         N = math.floor(w)
         # "Roulette" the last particle
-        seed_work = kernel.split_seed(idx_work, seed)
+        seed_work = rng.split_seed(idx_work, seed)
         if kernel.rng_from_seed(seed_work) < w - N:
             N += 1
         DNP["w"] = N
@@ -791,7 +791,7 @@ def build_gpu_progs():
     pre_complete = pre_fns["complete"]
     pre_clear_flags = pre_fns["clear_flags"]
 
-    @njit
+    @nb.njit
     def real_setup_gpu(mcdc):
         arena_size = 0x10000
         block_count = 240
@@ -805,7 +805,7 @@ def build_gpu_progs():
         )
         pre_init_program(mcdc["precursor_program"], 4096)
 
-    @njit
+    @nb.njit
     def real_teardown_gpu(mcdc):
         src_free_program(adapt.cast_uintp_to_voidptr(mcdc["source_program"]))
         pre_free_program(adapt.cast_uintp_to_voidptr(mcdc["precursor_program"]))

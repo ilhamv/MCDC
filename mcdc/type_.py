@@ -445,11 +445,15 @@ def make_type_material(input_deck):
     # General data
     struct = [
         ("ID", int64),
-        ("N_nuclide", int64),
         ("sensitivity", bool_),
+        ("uq", bool_),
+    ]
+
+    # Nuclide composition data
+    struct += [
+        ("N_nuclide", int64),
         ("nuclide_IDs", int64, (Nmax_nuclide,)),
         ("nuclide_densities", float64, (Nmax_nuclide,)),
-        ("uq", bool_),
     ]
 
     # MG data
@@ -762,7 +766,6 @@ def make_type_setting(deck):
         ("mode_CE", bool_),
         # Misc.
         ("progress_bar", bool_),
-        ("caching", bool_),
         ("output_name", str_),
         ("save_input_deck", bool_),
         ("track_particle", bool_),

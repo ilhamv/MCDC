@@ -3,7 +3,6 @@ from numba import njit, jit, objmode, literal_unroll, cuda, types
 from numba.extending import intrinsic
 import numba
 import mcdc.type_ as type_
-import mcdc.loop as loop
 
 try:
     import harmonize as harm

@@ -657,27 +657,6 @@ def source_particle_dd(seed, mcdc):
     return P
 
 
-@njit
-def distribute_work_dd(N, mcdc, precursor=False):
-    # Total # of work
-    work_size_total = N
-
-    if not mcdc["technique"]["dd_repro"]:
-        work_size, work_start = domain_work(mcdc, mcdc["dd_idx"], N)
-    else:
-        work_start = 0
-        work_size = work_size_total
-
-    if not precursor:
-        mcdc["mpi_work_start"] = work_start
-        mcdc["mpi_work_size"] = work_size
-        mcdc["mpi_work_size_total"] = work_size_total
-    else:
-        mcdc["mpi_work_start_precursor"] = work_start
-        mcdc["mpi_work_size_precursor"] = work_size
-        mcdc["mpi_work_size_total_precursor"] = work_size_total
-
-
 # =============================================================================
 # Random sampling
 # =============================================================================
@@ -1184,7 +1163,7 @@ def bank_rebalance(mcdc):
 
 
 @njit
-def distribute_work(N, mcdc, precursor=False):
+def distribute_work(N, mcdc):
     size = mcdc["mpi_size"]
     rank = mcdc["mpi_rank"]
 
@@ -1207,14 +1186,9 @@ def distribute_work(N, mcdc, precursor=False):
     else:
         work_start += rem
 
-    if not precursor:
-        mcdc["mpi_work_start"] = work_start
-        mcdc["mpi_work_size"] = work_size
-        mcdc["mpi_work_size_total"] = work_size_total
-    else:
-        mcdc["mpi_work_start_precursor"] = work_start
-        mcdc["mpi_work_size_precursor"] = work_size
-        mcdc["mpi_work_size_total_precursor"] = work_size_total
+    mcdc["mpi_work_start"] = work_start
+    mcdc["mpi_work_size"] = work_size
+    mcdc["mpi_work_size_total"] = work_size_total
 
 
 # =============================================================================

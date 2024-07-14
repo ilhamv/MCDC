@@ -56,26 +56,34 @@ class MaterialCard(InputCard):
     def __init__(self, N_nuclide, G=1, J=0):
         InputCard.__init__(self, "Material")
 
-        # Set card data
+        # General data
         self.ID = None
+        self.sensitivity = False
+        self.uq = False
+
+        # Nuclide composition data
         self.N_nuclide = N_nuclide
         self.nuclide_IDs = np.zeros(N_nuclide, dtype=int)
         self.nuclide_densities = np.zeros(N_nuclide, dtype=float)
+
+        # MG data
         self.G = G
         self.J = J
         self.speed = np.zeros(G)
+        self.total = np.zeros(G)
         self.capture = np.zeros(G)
         self.scatter = np.zeros(G)
         self.fission = np.zeros(G)
-        self.total = np.zeros(G)
         self.nu_s = np.ones(G)
+        self.nu_f = np.zeros(G)
         self.nu_p = np.zeros(G)
         self.nu_d = np.zeros([G, J])
-        self.nu_f = np.zeros(G)
         self.chi_s = np.zeros([G, G])
         self.chi_p = np.zeros([G, G])
-        self.sensitivity = False
-        self.uq = False
+
+        # Below are not transferred to the simulation global variable
+
+        # UQ helper
         self.flags = []
         self.distribution = ""
 
@@ -175,7 +183,7 @@ class CellCard(InputCard):
         self.fill_ID = -1
         self.translation = np.array([0.0, 0.0, 0.0])
         self.N_surface = 0
-        self.surface_ID = np.zeros(0, dtype=int)
+        self.surface_IDs = np.zeros(0, dtype=int)
 
 
 class UniverseCard(InputCard):

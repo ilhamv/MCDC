@@ -4,10 +4,14 @@ import numpy as np
 
 from mpi4py import MPI
 
+import mcdc.adapt as adapt
 import mcdc.code_factory as code_factory
 import mcdc.global_ as global_
+import mcdc.initializer as initializer
 import mcdc.prep as prep
+import mcdc.rng as rng
 import mcdc.simulation as simulation
+import mcdc.type_ as type_
 
 #from mcdc.iqmc.iqmc_loop import iqmc_simulation
 from mcdc.print_ import (
@@ -28,9 +32,6 @@ def run():
     # Preparation
     # ==================================================================================
 
-    # Start timer
-    preparation_start = MPI.Wtime()
-
     # Get input deck
     input_deck = global_.input_deck
 
@@ -50,14 +51,103 @@ def run():
     # Code factory
     # ==================================================================================
 
-    # Adapt functions
-    code_factory.adapt_functions(rng, input_deck)
+    # Make types
+    type_.make_type_particle(input_deck)
+    type_.make_type_particle_record(input_deck)
+    type_.make_type_nuclide(input_deck)
+    type_.make_type_material(input_deck)
+    type_.make_type_surface(input_deck)
+    type_.make_type_region()
+    type_.make_type_cell(input_deck)
+    type_.make_type_universe(input_deck)
+    type_.make_type_lattice(input_deck)
+    type_.make_type_source(input_deck)
+    type_.make_type_tally(input_deck)
+    type_.make_type_setting(input_deck)
+    type_.make_type_uq_tally(input_deck)
+    type_.make_type_uq(input_deck)
+    type_.make_type_domain_decomp(input_deck)
+    type_.make_type_dd_turnstile_event(input_deck)
+    type_.make_type_technique(input_deck)
+    type_.make_type_global(input_deck)
+    #
+    type_.make_type_translate(input_deck)
+    type_.make_type_group_array(input_deck)
+    type_.make_type_j_array(input_deck)
 
-    # Build the global variable container `mcdc`
+    # Create the global variable container
+    mcdc = np.zeros(1, dtype=type_.global_)[0]
 
+    # Set Numba-JIT decorator to all functions in selected modules
+    code_factory.numba_jit(rng, input_deck, numba)
 
-    # Stop timer
-    mcdc["runtime_preparation"] = MPI.Wtime() - preparation_start
+    # Set random number generator
+    code_factory.set_rng(rng, input_deck)
+
+    # ==============
+    # Initialization
+    # ==============
+
+    # Simulation objects
+    initializer.set_nuclides(mcdc, input_deck)
+    initializer.set_materials(mcdc, input_deck)
+    initializer.set_surfaces(mcdc, input_deck)
+    initializer.set_regions(mcdc, input_deck)
+    initializer.set_cells(mcdc, input_deck)
+    initializer.set_universes(mcdc, input_deck)
+    initializer.set_lattices(mcdc, input_deck)
+    initializer.set_sources(mcdc, input_deck)
+    initializer.set_tally(mcdc, input_deck)
+
+    # Simulation settings
+    initializer.set_setting(mcdc, input_deck)
+    initializer.set_particle_banks(mcdc, input_deck)
+    initializer.set_eigenvalue(mcdc, input_deck)
+    initializer.set_mpi(mcdc, input_deck)
+
+    # Occasional settings
+    initializer.set_domain_decomposition(mcdc, input_deck)
+    initializer.set_uncertainty_quantification(mcdc, input_deck)
+    initializer.set_sensitivity_quantification(mcdc, input_deck)
+    initializer.set_source_files(mcdc, input_deck)
+    initializer.set_IC_generator(mcdc, input_deck)
+
+    # Techniques (for variance and runtime reductions)
+    initializer.set_technique_flags(mcdc, input_deck)
+    initializer.set_population_control(mcdc, input_deck)
+    initializer.set_weight_roulette(mcdc, input_deck)
+    initializer.set_weight_window(mcdc, input_deck)
+
+    # Specials
+    initializer.set_iQMC(mcdc, input_deck)
+
+    # ==========================================
+    # Platform Targeting, Adapters, Toggles, etc
+    # ==========================================
+
+    target = input_deck.setting['hardware_target']
+    if target == "gpu":
+        if not adapt.HAS_HARMONIZE:
+            print_error(
+                "No module named 'harmonize' - GPU functionality not available. "
+            )
+        adapt.gpu_forward_declare()
+
+    adapt.set_toggle("iQMC", input_deck.technique["iQMC"])
+    adapt.set_toggle("domain_decomp", input_deck.technique["domain_decomposition"])
+    adapt.set_toggle("particle_tracker", mcdc["setting"]["track_particle"])
+    adapt.eval_toggle()
+    adapt.target_for(target)
+
+    if target == "gpu":
+        build_gpu_progs()
+
+    adapt.nopython_mode(input_deck.setting['numba_jit'])
+
+    loop.setup_gpu(mcdc)
+
+   # Hit timer
+    mcdc["runtime_preparation"] = MPI.Wtime() - total_start
 
     # ==================================================================================
     # Run simulatthe simulation

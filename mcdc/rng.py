@@ -4,6 +4,8 @@ Random Number Generator (RNG)
 Currently, MC/DC uses LCG with hash-based seeding
 [https://doi.org/10.48550/arXiv.2403.06362]
 """
+import numba as nb
+import numpy as np
 
 
 from mcdc.constant import (
@@ -18,8 +20,11 @@ from mcdc.constant import (
 # Wrapping addition and multiplication
 # ======================================================================================
 """
-These are needed because Python and Numba modes behave differently when overflow occurs.
-Python also automaticaly recasts uint into int.
+These are needed because
+  (1) Python and Numba modes behave differently when overflow occurs and
+  (2) Python recasts uint parameter into int.
+
+Check function `set_rng` in `code_factory.py` for the determination of the functions
 """
 # TODO: better idea?
 
@@ -37,28 +42,17 @@ def multiply_numba(a, b):
 
 
 def add_python(a, b):
-    a = numba.uint64(a)
-    b = numba.uint64(b)
+    a = nb.uint64(a)
+    b = nb.uint64(b)
     with np.errstate(all="ignore"):
         return a + b
 
 
 def multiply_python(a, b):
-    a = numba.uint64(a)
-    b = numba.uint64(b)
+    a = nb.uint64(a)
+    b = nb.uint64(b)
     with np.errstate(all="ignore"):
         return a * b
-
-
-def adapt_rng(python_mode):
-    global add, multiply
-
-    if python_mode:
-        add = add_python
-        multiply = multiply_python
-    else:
-        add = add_numba
-        multiply = multiply_numba
 
 
 # ======================================================================================
@@ -67,19 +61,19 @@ def adapt_rng(python_mode):
 
 
 def lcg(seed):
-    seed = numba.uint64(seed)
+    seed = nb.uint64(seed)
     return add(multiply(RNG_G, seed), RNG_C) & RNG_MOD_MASK
 
 
 def split_seed(key, seed):
     """murmur_hash64a"""
-    multiplier = numba.uint64(0xC6A4A7935BD1E995)
-    length = numba.uint64(8)
-    rotator = numba.uint64(47)
-    key = numba.uint64(key)
-    seed = numba.uint64(seed)
+    multiplier = nb.uint64(0xC6A4A7935BD1E995)
+    length = nb.uint64(8)
+    rotator = nb.uint64(47)
+    key = nb.uint64(key)
+    seed = nb.uint64(seed)
 
-    hash_value = numba.uint64(seed) ^ multiply(length, multiplier)
+    hash_value = nb.uint64(seed) ^ multiply(length, multiplier)
 
     key = multiply(key, multiplier)
     key ^= key >> rotator

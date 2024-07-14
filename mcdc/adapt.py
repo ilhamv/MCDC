@@ -219,6 +219,56 @@ def universal_arrays(target):
     return universal_arrays_inner
 
 
+# =============================================================================
+# Seperate GPU/CPU Functions to Target Different Platforms
+# =============================================================================
+
+
+@for_cpu()
+def device(prog):
+    return prog
+
+
+@for_gpu()
+def device(prog):
+    return device_gpu(prog)
+
+
+@for_cpu()
+def group(prog):
+    return prog
+
+
+@for_gpu()
+def group(prog):
+    return group_gpu(prog)
+
+
+@for_cpu()
+def thread(prog):
+    return prog
+
+
+@for_gpu()
+def thread(prog):
+    return thread_gpu(prog)
+
+
+@for_cpu()
+def add_active(particle, prog):
+    kernel.add_particle(particle, prog["bank_active"])
+
+
+@for_gpu()
+def add_active(particle, prog):
+    P = kernel.recordlike_to_particle(particle)
+    if SIMPLE_ASYNC:
+        step_async(prog, P)
+    else:
+        find_cell_async(prog, P)
+
+
+@for_cpu()
 
 # =========================================================================
 # Program Specifications

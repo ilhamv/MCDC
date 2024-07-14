@@ -10,7 +10,7 @@ from mcdc.constant import *
 from mcdc.print_ import print_error, print_msg
 from mcdc.type_ import score_list
 import mcdc.adapt as adapt
-from mcdc.adapt import toggle, for_cpu, for_gpu
+from mcdc.adapt import gpu_unsupported, for_cpu, for_gpu
 
 # =============================================================================
 # Domain Decomposition
@@ -21,7 +21,7 @@ from mcdc.adapt import toggle, for_cpu, for_gpu
 # =============================================================================
 
 
-@toggle("domain_decomp")
+@gpu_unsupported("domain_decomp")
 def domain_crossing(P, mcdc):
     # Domain mesh crossing
     seed = P["rng_seed"]

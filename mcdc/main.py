@@ -40,6 +40,9 @@ def run():
     # Override input deck with command line options
     prep.override_input_deck(input_deck, cmd_option)
 
+    # Check incompatibilities
+    prep.check_incompatibles(inputt_deck)
+
     # Finalize input deck
     prep.finalize_input_deck(input_deck)
 
@@ -132,15 +135,11 @@ def run():
     # ===============
     # GPU mode set up
     # ===============
-    '''
+
     gpu_mode = input_deck.setting['hardware_target'] == 'gpu'
 
     if gpu_mode:
         code_factory.gpu_forward_declare()
-
-    adapt.set_toggle("iQMC", input_deck.technique["iQMC"])
-    adapt.set_toggle("domain_decomp", input_deck.technique["domain_decomposition"])
-    adapt.eval_toggle()
 
     if target == "gpu":
         build_gpu_progs()
@@ -148,7 +147,6 @@ def run():
     adapt.nopython_mode(input_deck.setting['numba_jit'])
 
     code_factory.setup_gpu(mcdc)
-    '''
 
     # Hit timer
     mcdc["runtime_preparation"] = MPI.Wtime() - total_start

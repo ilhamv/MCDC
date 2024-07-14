@@ -3,6 +3,7 @@ import argparse
 from mpi4py import MPI
 
 from mcdc.card import UniverseCard
+from mcdc.print_ import print_error
 
 
 # ======================================================================================
@@ -103,6 +104,15 @@ def finalize_input_deck(input_deck):
 
     # Finalize inputs related to domain decomposition
     finalize_dd_input(input_deck)
+
+
+def check_incompatibles(input_deck):
+    # Methods not supported by GPU yet
+    if input_deck.setting['hardware_target'] == 'gpu':
+        if input_deck.technique['iQMC']:
+            print_error("iQCM is currently not supported for GPU mode.")
+        if input_deck.technique['domain_decomposition']:
+            print_error("Domain decomposition is currently not supported for GPU mode.")
 
 
 def set_numba_env_variables(numba, input_deck):

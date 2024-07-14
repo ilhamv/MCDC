@@ -59,7 +59,7 @@ def cast_voidptr_to_uintp(typingctx, src):
 # Decorators
 # =============================================================================
 
-toggle_rosters = {}
+gpu_unsupported_rosters = []
 
 target_rosters = {}
 
@@ -269,6 +269,55 @@ def add_active(particle, prog):
 
 
 @for_cpu()
+def add_source(particle, prog):
+    kernel.add_particle(particle, prog["bank_source"])
+
+
+@for_gpu()
+def add_source(particle, prog):
+    mcdc = device(prog)
+    kernel.add_particle(particle, mcdc["bank_source"])
+
+
+@for_cpu()
+def add_census(particle, prog):
+    kernel.add_particle(particle, prog["bank_census"])
+
+
+@for_gpu()
+def add_census(particle, prog):
+    mcdc = device(prog)
+    kernel.add_particle(particle, mcdc["bank_census"])
+
+
+@for_cpu()
+def add_IC(particle, prog):
+    kernel.add_particle(particle, prog["technique"]["IC_bank_neutron_local"])
+
+
+@for_gpu()
+def add_IC(particle, prog):
+    mcdc = device(prog)
+    kernel.add_particle(particle, mcdc["technique"]["IC_bank_neutron_local"])
+
+
+@for_cpu()
+def local_translate():
+    return np.zeros(1, dtype=type_.translate)[0]
+
+
+@for_gpu()
+def local_translate():
+    trans = cuda.local.array(1, type_.translate)[0]
+    for i in range(3):
+        trans["values"][i] = 0
+    return trans
+
+
+@for_cpu()
+def local_group_array():
+    return np.zeros(1, dtype=type_.group_array)[0]
+
 
 # =========================================================================
 # Program Specifications

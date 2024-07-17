@@ -278,8 +278,3 @@ def make_spec(target):
         (iterate_async,) = harm.RuntimeSpec.async_dispatch(iterate)
     elif target != "cpu":
         unknown_target(target)
-
-
-@njit
-def empty_base_func(prog):
-    pass

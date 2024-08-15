@@ -86,8 +86,11 @@ for i, name in enumerate(names):
     if not os.path.exists("input.py"):
         print(Fore.RED + "  input.py is missing\n" + Style.RESET_ALL)
         sys.exit()
-    if not os.path.exists("answer.h5"):
+    if target == 'cpu' and not os.path.exists("answer.h5"):
         print(Fore.RED + "  answer.h5 is missing\n" + Style.RESET_ALL)
+        sys.exit()
+    if target == 'gpu' and not os.path.exists("answer_gpu.h5"):
+        print(Fore.RED + "  answer_gpu.h5 is missing\n" + Style.RESET_ALL)
         sys.exit()
 
     # Delete output if exists
@@ -124,7 +127,10 @@ for i, name in enumerate(names):
 
     # Get the output and the answer key
     output = h5py.File("output.h5", "r")
-    answer = h5py.File("answer.h5", "r")
+    if target == 'cpu':
+        answer = h5py.File("answer.h5", "r")
+    if target == 'gpu':
+        answer = h5py.File("answer_gpu.h5", "r")
 
     runtimes[-1] = output["runtime/total"][()]
     print("  (%.2f seconds)" % runtimes[-1][0])

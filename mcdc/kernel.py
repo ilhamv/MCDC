@@ -2712,6 +2712,34 @@ def scatter_direction(ux, uy, uz, mu0, azi):
 
 
 @njit
+def tmp_get_nu(t):
+
+    alpha_min = -3.0
+    alpha_max = 6.0
+
+    alpha_min = -7.0
+    alpha_max = 14.0
+
+    # alpha_min = -15.0
+    # alpha_max = 30.0
+
+    alpha0_rise = alpha_min
+    alpha1_rise = alpha_max - alpha_min
+    alpha0_drop = alpha_max
+    alpha1_drop = alpha_min - alpha_max
+
+    if t <= 1.0:
+        alpha = alpha_min
+    elif t <= 2.0:
+        alpha = alpha0_rise + alpha1_rise * (t - 1.0)
+    elif t <= 3.0:
+        alpha = alpha0_drop + alpha1_drop * (t - 2.0)
+    else:
+        alpha = alpha_min
+    return 1.0 + alpha / 20.0
+
+
+@njit
 def fission(P_arr, prog):
     P = P_arr[0]
     mcdc = adapt.mcdc_global(prog)
@@ -2734,7 +2762,8 @@ def fission(P_arr, prog):
     # Get number of secondaries
     if mcdc["setting"]["mode_MG"]:
         g = P["g"]
-        nu = material["nu_f"][g]
+        # nu = material["nu_f"][g]
+        nu = tmp_get_nu(P["t"])
     else:
         nuclide = sample_nuclide(material, P_arr, XS_FISSION, mcdc)
         E = P["E"]

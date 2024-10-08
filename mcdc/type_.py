@@ -1376,6 +1376,7 @@ def make_type_global(input_deck):
             ("source_program_pointer", uintp),
             ("precursor_program_pointer", uintp),
             ("source_seed", uint64),
+            ("alpha_limits", float64, (2,)),
         ]
     )
 

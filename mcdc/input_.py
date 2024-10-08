@@ -42,6 +42,11 @@ from mcdc.print_ import print_error
 import mcdc.type_ as type_
 
 
+def alpha_limits(alpha_factor):
+    global_.input_deck.alpha_limits[0] = -alpha_factor
+    global_.input_deck.alpha_limits[1] = 2.0 * alpha_factor
+
+
 def nuclide(
     capture=None,
     scatter=None,

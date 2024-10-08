@@ -151,5 +151,7 @@ class InputDeck:
             "surfaces": [],
         }
 
+        self.alpha_limits = np.array([0.0, 0.0])
+
 
 input_deck = InputDeck()

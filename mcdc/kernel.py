@@ -2712,16 +2712,9 @@ def scatter_direction(ux, uy, uz, mu0, azi):
 
 
 @njit
-def tmp_get_nu(t):
-
-    alpha_min = -3.0
-    alpha_max = 6.0
-
-    alpha_min = -7.0
-    alpha_max = 14.0
-
-    # alpha_min = -15.0
-    # alpha_max = 30.0
+def tmp_get_nu(t, mcdc):
+    alpha_min = mcdc["alpha_limits"][0]
+    alpha_max = mcdc["alpha_limits"][1]
 
     alpha0_rise = alpha_min
     alpha1_rise = alpha_max - alpha_min
@@ -2763,7 +2756,7 @@ def fission(P_arr, prog):
     if mcdc["setting"]["mode_MG"]:
         g = P["g"]
         # nu = material["nu_f"][g]
-        nu = tmp_get_nu(P["t"])
+        nu = tmp_get_nu(P["t"], mcdc)
     else:
         nuclide = sample_nuclide(material, P_arr, XS_FISSION, mcdc)
         E = P["E"]
@@ -3048,7 +3041,8 @@ def branchless_collision(P_arr, prog):
     SigmaT = get_MacroXS(XS_TOTAL, material, P_arr, mcdc)
     n_scatter = get_MacroXS(XS_NU_SCATTER, material, P_arr, mcdc)
     n_fission = get_MacroXS(XS_NU_FISSION, material, P_arr, mcdc) / mcdc["k_eff"]
-    n_total = n_fission + n_scatter
+    # n_total = n_fission + n_scatter
+    n_total = tmp_get_nu(P["t"], mcdc)
     P["w"] *= n_total / SigmaT
 
     P_rec_arr = adapt.local_array(1, type_.particle_record)

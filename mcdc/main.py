@@ -480,6 +480,8 @@ def prepare():
     mcdc_arr = np.zeros(1, dtype=type_.global_)
     mcdc = mcdc_arr[0]
 
+    mcdc["alpha_limits"] = input_deck.alpha_limits
+
     # Now, set up the global variable container
 
     # Get modes

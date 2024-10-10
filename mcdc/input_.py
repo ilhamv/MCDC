@@ -1534,6 +1534,7 @@ def weight_roulette_alpha(time_grid, alpha):
     card["weight_roulette_alpha"] = True
     card["wra_time_grid"] = time_grid
     card["wra_alpha"] = alpha
+    card["weighted_emission"] = False
 
 
 def IC_generator(

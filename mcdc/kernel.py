@@ -2751,6 +2751,12 @@ def fission(P_arr, prog):
     P_new_arr = adapt.local_array(1, type_.particle_record)
     P_new = P_new_arr[0]
 
+    # if P['w'] > 1.0:
+    #    print('multiply')
+    #    print(P['t'], P['w'])
+    #    print(nu, weight_new)
+    #    input()
+
     for n in range(N):
         # Create new particle
         split_as_record(P_new_arr, P_arr)
@@ -3144,6 +3150,8 @@ def weight_roulette_alpha(P_arr, time_elapsed, mcdc):
     time_end = P["t"]
     time_start = time_end - time_elapsed
 
+    # print("time start/end", time_start, time_end)
+
     idx_start = binary_search(time_start, time_grid)
     idx_end = binary_search(time_end, time_grid)
 
@@ -3170,7 +3178,7 @@ def weight_roulette_alpha(P_arr, time_elapsed, mcdc):
         t_low = time_grid[i + 1]
         # print('step %i'%i, w_survive)
 
-    if w_survive < P["w"]:
+    if w_survive <= P["w"]:
         # print('decaying')
         # input()
         return

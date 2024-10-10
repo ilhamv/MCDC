@@ -18,6 +18,7 @@ from mcdc.input_ import (
     weight_window,
     iQMC,
     weight_roulette,
+    weight_roulette_alpha,
     IC_generator,
     uq,
     reset,

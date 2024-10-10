@@ -921,6 +921,7 @@ def make_type_technique(input_deck):
         ("population_control", bool_),
         ("weight_window", bool_),
         ("weight_roulette", bool_),
+        ("weight_roulette_alpha", bool_),
         ("iQMC", bool_),
         ("IC_generator", bool_),
         ("branchless_collision", bool_),
@@ -971,6 +972,13 @@ def make_type_technique(input_deck):
 
     # Constants
     struct += [("wr_threshold", float64), ("wr_survive", float64)]
+
+    # =========================================================================
+    # Weight Roulette Alpha
+    # =========================================================================
+
+    Nt = len(input_deck.technique["wra_time_grid"])
+    struct += [("wra_time_grid", float64, (Nt,)), ("wra_alpha", float64, (Nt,))]
 
     # =========================================================================
     # Quasi Monte Carlo

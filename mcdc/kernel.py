@@ -1883,6 +1883,8 @@ def score_mesh_tally(P_arr, distance, tally, data, mcdc):
             score_type = tally["scores"][i]
             if score_type == SCORE_FLUX:
                 score = flux
+            elif score_type == SCORE_DENSITY:
+                score = flux * ut
             elif score_type == SCORE_TOTAL:
                 SigmaT = get_MacroXS(XS_TOTAL, material, P_arr, mcdc)
                 score = flux * SigmaT
@@ -2356,6 +2358,11 @@ def move_to_event(P_arr, data, mcdc):
     # Move particle
     move_particle(P_arr, distance, mcdc)
 
+    # Time eigenvalue adjusted weight roulette
+    if mcdc["technique"]["weight_roulette_alpha"]:
+        time_elapsed = distance / speed
+        weight_roulette_alpha(P_arr, time_elapsed, mcdc)
+
 
 @njit
 def distance_to_collision(P_arr, mcdc):
@@ -2766,6 +2773,12 @@ def fission(P_arr, prog):
     P_new_arr = adapt.local_array(1, type_.particle_record)
     P_new = P_new_arr[0]
 
+    # if P['w'] > 1.0:
+    #    print('multiply')
+    #    print(P['t'], P['w'])
+    #    print(nu, weight_new)
+    #    input()
+
     for n in range(N):
         # Create new particle
         split_as_record(P_new_arr, P_arr)
@@ -3140,6 +3153,67 @@ def weight_roulette(P_arr, mcdc):
             P["iqmc"]["w"][:] = w_survive
     else:
         P["alive"] = False
+
+
+# =============================================================================
+# Weight Roulette
+# =============================================================================
+
+
+@njit
+def weight_roulette_alpha(P_arr, time_elapsed, mcdc):
+    P = P_arr[0]
+    time_grid = mcdc["technique"]["wra_time_grid"]
+    alpha = mcdc["technique"]["wra_alpha"]
+
+    # print(time_grid)
+    # print(alpha)
+    # print(P['t'], P['w'], time_elapsed)
+
+    time_end = P["t"]
+    time_start = time_end - time_elapsed
+
+    # print("time start/end", time_start, time_end)
+
+    idx_start = binary_search(time_start, time_grid)
+    idx_end = binary_search(time_end, time_grid)
+
+    if idx_end == -1 or idx_start == len(time_grid - 1):
+        # print('outside')
+        # input()
+        return
+
+    w_survive = P["w"]
+    # print('start', w_survive)
+    t_low = max(time_start, time_grid[0])
+    for i in range(idx_start, idx_end + 1):
+        alpha0 = alpha[i]
+        alpha1 = (alpha[i + 1] - alpha[i]) / (time_grid[i + 1] - time_grid[i])
+
+        if t_low != time_grid[i]:
+            alpha0 = alpha0 + alpha1 * (t_low - time_grid[i])
+
+        t_high = min(time_end, time_grid[i + 1])
+        dt = t_high - t_low
+        exponent = alpha0 * dt + 0.5 * alpha1 * dt * dt
+        w_survive *= math.exp(exponent)
+
+        t_low = time_grid[i + 1]
+        # print('step %i'%i, w_survive)
+
+    if w_survive <= P["w"]:
+        # print('decaying')
+        # input()
+        return
+
+    prob_survive = P["w"] / w_survive
+    if rng(P_arr) < prob_survive:
+        P["w"] = w_survive
+    else:
+        P["alive"] = False
+
+    # print(prob_survive, P['alive'], P['w'])
+    # input()
 
 
 # =============================================================================

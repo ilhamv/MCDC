@@ -498,6 +498,8 @@ def step_particle(P_arr, data, prog):
 
     # Determine and move to event
     kernel.move_to_event(P_arr, data, mcdc)
+    if not P["alive"]:
+        return
 
     # Execute events
     if P["event"] == EVENT_LOST:

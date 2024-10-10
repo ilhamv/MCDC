@@ -2748,7 +2748,10 @@ def fission(P_arr, prog):
     P["alive"] = False
 
     # Get effective and new weight
-    if mcdc["technique"]["weighted_emission"]:
+    if mcdc["technique"]["weight_roulette_alpha"]:
+        weight_new = P["w_secondary"]
+        weight_eff = P["w"] / P["w_secondary"]
+    elif mcdc["technique"]["weighted_emission"]:
         weight_eff = P["w"]
         weight_new = 1.0
     else:
@@ -2773,11 +2776,11 @@ def fission(P_arr, prog):
     P_new_arr = adapt.local_array(1, type_.particle_record)
     P_new = P_new_arr[0]
 
-    if P["w"] > 1.0:
-        print("multiply")
-        print(P["t"], P["w"])
-        print(nu, weight_new)
-        # input()
+    # if P["w"] > 1.0:
+    # print("multiply")
+    # print(P["t"], P["w"])
+    # print(nu, weight_new)
+    # input()
 
     for n in range(N):
         # Create new particle
@@ -3162,30 +3165,30 @@ def weight_roulette(P_arr, mcdc):
 
 @njit
 def weight_roulette_alpha(P_arr, time_elapsed, mcdc):
-    return
     P = P_arr[0]
     time_grid = mcdc["technique"]["wra_time_grid"]
     alpha = mcdc["technique"]["wra_alpha"]
 
-    print(time_grid)
-    print(alpha)
-    print(P["t"], P["w"], time_elapsed)
+    # print(time_grid)
+    # print(alpha)
+    # print(P["t"], P["w"], time_elapsed)
 
     time_end = P["t"]
     time_start = time_end - time_elapsed
 
-    print("time start/end", time_start, time_end)
+    # print("time start/end", time_start, time_end)
 
     idx_start = binary_search(time_start, time_grid)
     idx_end = binary_search(time_end, time_grid)
 
     if idx_end == -1 or idx_start == len(time_grid - 1):
-        print("outside")
+        P["w_secondary"] = P["w"]
+        # print("outside")
         # input()
         return
 
     w_survive = P["w"]
-    print("start", w_survive)
+    # print("start", w_survive)
     t_low = max(time_start, time_grid[0])
     for i in range(idx_start, idx_end + 1):
         alpha0 = alpha[i]
@@ -3200,10 +3203,12 @@ def weight_roulette_alpha(P_arr, time_elapsed, mcdc):
         w_survive *= math.exp(exponent)
 
         t_low = time_grid[i + 1]
-        print("step %i" % i, w_survive)
+        # print("step %i" % i, w_survive)
 
+    P["w_secondary"] = w_survive
+    return
     if w_survive <= P["w"]:
-        print("decaying")
+        # print("decaying")
         # input()
         return
 
@@ -3213,7 +3218,7 @@ def weight_roulette_alpha(P_arr, time_elapsed, mcdc):
     else:
         P["alive"] = False
 
-    print(prob_survive, P["alive"], P["w"])
+    # print(prob_survive, P["alive"], P["w"])
     # input()
 
 

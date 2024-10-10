@@ -219,6 +219,7 @@ def make_type_particle(input_deck):
         ("fresh", bool_),
         ("event", int64),
         ("rng_seed", uint64),
+        ("w_secondary", float64),
     ]
 
     # Get modes

@@ -89,8 +89,11 @@ class InputDeck:
             "dd_repro": False,
             "dd_work_ratio": np.array([1]),
             "weight_roulette": False,
+            "weight_roulette_alpha": False,
             "wr_threshold": 0.0,
             "wr_survive": 1.0,
+            "wra_time_grid": np.array([0.0, INF]),
+            "wra_alpha": np.array([0.0, 0.0]),
             "iQMC": False,
             "iqmc": {
                 "sample_method": "halton",

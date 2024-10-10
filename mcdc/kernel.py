@@ -2358,6 +2358,11 @@ def move_to_event(P_arr, data, mcdc):
     # Move particle
     move_particle(P_arr, distance, mcdc)
 
+    # Time eigenvalue adjusted weight roulette
+    if mcdc["technique"]["weight_roulette_alpha"]:
+        time_elapsed = distance / speed
+        weight_roulette_alpha(P_arr, time_elapsed, mcdc)
+
 
 @njit
 def distance_to_collision(P_arr, mcdc):
@@ -3117,6 +3122,44 @@ def weight_roulette(P_arr, mcdc):
         P["w"] = w_survive
         if mcdc["technique"]["iQMC"]:
             P["iqmc"]["w"][:] = w_survive
+    else:
+        P["alive"] = False
+
+
+# =============================================================================
+# Weight Roulette
+# =============================================================================
+
+
+@njit
+def weight_roulette_alpha(P_arr, time_elapsed, mcdc):
+    P = P_arr[0]
+    time_grid = mcdc["technique"]["wra_time_grid"]
+    alpha = mcdc["technique"]["wra_time_alpha"]
+
+    time_end = P[t]
+    time_start = time_end - time_elapsed
+
+    idx_start = binary_search(time_start, time)
+    idx_end = binary_search(time_end, time)
+
+    if idx_end == -1 or idx_start == len(time_grid - 1):
+        return
+
+    w_survive = P["w"]
+    t_low = max(time_start, time_grid[0])
+    for i in range(idx_start, idx_end + 1):
+        t_high = min(time_end, time_grid[i + 1])
+        dt = t_high - t_low
+        w_target *= math.exp(alpha[i] * dt)
+        t_low = time[i]
+
+    if w_survive < P["w"]:
+        return
+
+    prob_survive = P[w] / w_target
+    if rng(P_arr) < prob_survive:
+        P["w"] = w_survive
     else:
         P["alive"] = False
 

@@ -921,6 +921,7 @@ def prepare():
         "weight_window",
         "domain_decomposition",
         "weight_roulette",
+        "weight_roulette_alpha",
         "iQMC",
         "IC_generator",
         "branchless_collision",
@@ -979,6 +980,15 @@ def prepare():
 
     # Survival probability
     mcdc["technique"]["wr_survive"] = input_deck.technique["wr_survive"]
+
+    # =========================================================================
+    # Weight roulette alpha
+    # =========================================================================
+
+    # Threshold
+    mcdc["technique"]["wra_time_grid"] = input_deck.technique["wra_time_grid"]
+    mcdc["technique"]["wra_alpha"] = input_deck.technique["wra_alpha"]
+
     # =========================================================================
     # Domain Decomposition
     # =========================================================================

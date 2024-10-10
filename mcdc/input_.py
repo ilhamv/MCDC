@@ -1528,6 +1528,14 @@ def weight_roulette(w_threshold=0.2, w_survive=1.0):
     card["wr_survive"] = w_survive
 
 
+def weight_roulette_alpha(time_grid, alpha):
+    # TODO: Docs
+    card = global_.input_deck.technique
+    card["weight_roulette_alpha"] = True
+    card["wra_time_grid"] = time_grid
+    card["wra_alpha"] = alpha
+
+
 def IC_generator(
     N_neutron=0,
     N_precursor=0,

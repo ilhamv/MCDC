@@ -497,6 +497,7 @@ def step_particle(P_arr, data, prog):
     mcdc = adapt.mcdc_global(prog)
 
     # Determine and move to event
+    P["w_secondary"] = P["w"]
     kernel.move_to_event(P_arr, data, mcdc)
     if not P["alive"]:
         return

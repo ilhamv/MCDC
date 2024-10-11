@@ -2358,7 +2358,7 @@ def move_to_event(P_arr, data, mcdc):
     # Move particle
     move_particle(P_arr, distance, mcdc)
 
-    # Time eigenvalue adjusted weight roulette
+    # Adjust secondary target weight
     if mcdc["technique"]["weight_roulette_alpha"]:
         time_elapsed = distance / speed
         weight_roulette_alpha(P_arr, time_elapsed, mcdc)
@@ -3169,26 +3169,16 @@ def weight_roulette_alpha(P_arr, time_elapsed, mcdc):
     time_grid = mcdc["technique"]["wra_time_grid"]
     alpha = mcdc["technique"]["wra_alpha"]
 
-    # print(time_grid)
-    # print(alpha)
-    # print(P["t"], P["w"], time_elapsed)
-
     time_end = P["t"]
     time_start = time_end - time_elapsed
-
-    # print("time start/end", time_start, time_end)
 
     idx_start = binary_search(time_start, time_grid)
     idx_end = binary_search(time_end, time_grid)
 
     if idx_end == -1 or idx_start == len(time_grid - 1):
-        P["w_secondary"] = P["w"]
-        # print("outside")
-        # input()
         return
 
     w_survive = P["w"]
-    # print("start", w_survive)
     t_low = max(time_start, time_grid[0])
     for i in range(idx_start, idx_end + 1):
         alpha0 = alpha[i]
@@ -3203,23 +3193,8 @@ def weight_roulette_alpha(P_arr, time_elapsed, mcdc):
         w_survive *= math.exp(exponent)
 
         t_low = time_grid[i + 1]
-        # print("step %i" % i, w_survive)
 
     P["w_secondary"] = w_survive
-    return
-    if w_survive <= P["w"]:
-        # print("decaying")
-        # input()
-        return
-
-    prob_survive = P["w"] / w_survive
-    if rng(P_arr) < prob_survive:
-        P["w"] = w_survive
-    else:
-        P["alive"] = False
-
-    # print(prob_survive, P["alive"], P["w"])
-    # input()
 
 
 # =============================================================================

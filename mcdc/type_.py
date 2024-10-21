@@ -874,6 +874,7 @@ def make_type_setting(deck):
         ("IC_file", bool_),
         ("IC_file_name", str_),
         ("N_precursor", uint64),
+        ("tmp_rho_max", float64),
     ]
 
     # Finalize setting type

@@ -18,7 +18,7 @@ from mcdc.print_ import (
     print_progress_iqmc,
 )
 
-caching = False
+caching = True
 
 
 def set_cache(setting):

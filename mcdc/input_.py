@@ -42,6 +42,10 @@ from mcdc.print_ import print_error
 import mcdc.type_ as type_
 
 
+def tmp_rho_max(rho_max):
+    global_.input_deck.setting["tmp_rho_max"] = rho_max
+
+
 def nuclide(
     capture=None,
     scatter=None,

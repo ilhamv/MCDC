@@ -3061,14 +3061,14 @@ def branchless_collision(P_arr, prog):
             nuclide = sample_nuclide(material, P_arr, XS_NU_FISSION, mcdc)
             sample_phasespace_fission_nuclide(P_arr, nuclide, P_arr, mcdc)
 
-            # Beyond time census or time boundary?
-            idx_census = mcdc["idx_census"]
-            if P["t"] > mcdc["setting"]["census_time"][idx_census]:
-                P["alive"] = False
-                split_as_record(P_rec_arr, P_arr)
-                adapt.add_active(P_rec_arr, prog)
-            elif P["t"] > mcdc["setting"]["time_boundary"]:
-                P["alive"] = False
+        # Beyond time census or time boundary?
+        idx_census = mcdc["idx_census"]
+        if P["t"] > mcdc["setting"]["census_time"][idx_census]:
+            P["alive"] = False
+            split_as_record(P_rec_arr, P_arr)
+            adapt.add_active(P_rec_arr, prog)
+        elif P["t"] > mcdc["setting"]["time_boundary"]:
+            P["alive"] = False
 
 
 # =============================================================================
@@ -3173,7 +3173,8 @@ def get_MacroXS(type_, material, P_arr, mcdc):
             scatter = material["scatter"][g]
             return nu * scatter
         elif type_ == XS_NU_FISSION:
-            nu = material["nu_f"][g]
+            # nu = material["nu_f"][g]
+            nu = tmp_get_nu(P["t"], mcdc["setting"]["tmp_rho_max"])
             fission = material["fission"][g]
             return nu * fission
         elif type_ == XS_NU_FISSION_PROMPT:

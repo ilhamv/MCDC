@@ -1025,6 +1025,7 @@ def get_particle(P_arr, bank, mcdc):
     P["cell_ID"] = -1
     P["surface_ID"] = -1
     P["event"] = -1
+    P["distance_traveled"] = 0.0
     return True
 
 
@@ -2357,6 +2358,7 @@ def move_to_event(P_arr, data, mcdc):
 
     # Move particle
     move_particle(P_arr, distance, mcdc)
+    P["distance_traveled"] += distance
 
 
 @njit
@@ -2486,6 +2488,7 @@ def scattering(P_arr, prog):
             P["g"] = P_new["g"]
             P["E"] = P_new["E"]
             P["w"] = P_new["w"]
+            P["distance_traveled"] = 0.0
         else:
             adapt.add_active(P_new_arr, prog)
 
@@ -2752,6 +2755,14 @@ def fission(P_arr, prog):
     else:
         weight_eff = 1.0
         weight_new = P["w"]
+    if mcdc["technique"]["multiplicity_adjustment"]:
+        weight_eff
+        weight_new
+        print(
+            P["distance_traveled"],
+            mcdc["technique"]["ma_time_grid"],
+            mcdc["technique"]["ma_time_constant"],
+        )
 
     # Sample nuclide if CE
     material = mcdc["materials"][P["material_ID"]]
@@ -2805,6 +2816,7 @@ def fission(P_arr, prog):
                 P["g"] = P_new["g"]
                 P["E"] = P_new["E"]
                 P["w"] = P_new["w"]
+                P["distance_traveled"] = 0.0
             else:
                 adapt.add_active(P_new_arr, prog)
 

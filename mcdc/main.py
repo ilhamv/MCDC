@@ -925,6 +925,7 @@ def prepare():
         "IC_generator",
         "branchless_collision",
         "uq",
+        "multiplicity_adjustment",
     ]:
         copy_field(mcdc["technique"], input_deck.technique, name)
 
@@ -979,6 +980,14 @@ def prepare():
 
     # Survival probability
     mcdc["technique"]["wr_survive"] = input_deck.technique["wr_survive"]
+
+    # =========================================================================
+    # Multiplicity adjustment
+    # =========================================================================
+
+    mcdc["technique"]["ma_time_grid"] = input_deck.technique["ma_time_grid"]
+    mcdc["technique"]["ma_time_constant"] = input_deck.technique["ma_time_constant"]
+
     # =========================================================================
     # Domain Decomposition
     # =========================================================================

@@ -143,6 +143,9 @@ class InputDeck:
             "IC_cycle_stretch": 1.0,
             "branchless_collision": False,
             "uq": False,
+            "multiplicity_adjustment": False,
+            "ma_time_grid": np.array([0.0, INF]),
+            "ma_time_constant": np.array([0.0]),
         }
 
         self.uq_deltas = {

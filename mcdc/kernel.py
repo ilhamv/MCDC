@@ -2741,6 +2741,44 @@ def tmp_get_nu(t, rho_max):
 
 
 @njit
+def adjusted_secondary_weight(P_arr, time_elapsed, mcdc):
+    P = P_arr[0]
+    time_grid = mcdc["technique"]["ma_time_grid"]
+    flux = mcdc["technique"]["ma_flux"]
+
+    time_end = P["t"]
+    time_start = time_end - time_elapsed
+
+    if time_end < time_grid[0] or time_start > time_grid[-1]:
+        return P["w"]
+
+    time_end = min(time_end, time_grid[-1])
+    time_start = max(time_start, time_grid[0])
+
+    # Search XS energy bin index
+    idx_start = binary_search(time_start, time_grid)
+    idx_end = binary_search(time_end, time_grid)
+
+    if idx_start == -1:
+        idx_start = 0
+
+    # Linear interpolation
+    t1 = time_grid[idx_start]
+    t2 = time_grid[idx_start + 1]
+    flux1 = flux[idx_start]
+    flux2 = flux[idx_start + 1]
+    flux_start = flux1 + (time_start - t1) * (flux2 - flux1) / (t2 - t1)
+
+    t1 = time_grid[idx_end]
+    t2 = time_grid[idx_end + 1]
+    flux1 = flux[idx_end]
+    flux2 = flux[idx_end + 1]
+    flux_end = flux1 + (time_end - t1) * (flux2 - flux1) / (t2 - t1)
+
+    return P["w"] * flux_end / flux_start
+
+
+@njit
 def fission(P_arr, prog):
     P = P_arr[0]
     mcdc = adapt.mcdc_global(prog)
@@ -2749,20 +2787,17 @@ def fission(P_arr, prog):
     P["alive"] = False
 
     # Get effective and new weight
-    if mcdc["technique"]["weighted_emission"]:
+    if mcdc["technique"]["multiplicity_adjustment"]:
+        speed = physics.get_speed(P_arr, mcdc)
+        time_elapsed = P["distance_traveled"] / speed
+        weight_new = adjusted_secondary_weight(P_arr, time_elapsed, mcdc)
+        weight_eff = P["w"] / weight_new
+    elif mcdc["technique"]["weighted_emission"]:
         weight_eff = P["w"]
         weight_new = 1.0
     else:
         weight_eff = 1.0
         weight_new = P["w"]
-    if mcdc["technique"]["multiplicity_adjustment"]:
-        weight_eff
-        weight_new
-        print(
-            P["distance_traveled"],
-            mcdc["technique"]["ma_time_grid"],
-            mcdc["technique"]["ma_time_constant"],
-        )
 
     # Sample nuclide if CE
     material = mcdc["materials"][P["material_ID"]]
@@ -2789,36 +2824,74 @@ def fission(P_arr, prog):
         # Set weight
         P_new["w"] = weight_new
 
+        # How many times to bank
+        N_bank = 1
+
         # Sample fission neutron phase space
         if mcdc["setting"]["mode_MG"]:
             sample_phasespace_fission(P_arr, material, P_new_arr, mcdc)
         else:
             sample_phasespace_fission_nuclide(P_arr, nuclide, P_new_arr, mcdc)
 
+        """
+        if P_new["t"] > P['t']:
+            t0 = P['t']
+            tmax = mcdc['setting']['time_boundary']
+            dt = tmax - t0
+            decay = 0.1
+            emission_time = t0 + rng(P_arr) * dt
+            denominator = 1.0 / dt
+            numerator = 0.1 * math.exp(-decay * (emission_time - t0))
+            P_new['w'] *= numerator / denominator
+            P_new['t'] = emission_time
+        """
+
         # Skip if it's beyond time boundary
         if P_new["t"] > mcdc["setting"]["time_boundary"]:
+            continue
+        """
+        # Delayed?
+        if mcdc["technique"]["multiplicity_adjustment"]:
+            if P_new["t"] > P['t']:
+                time_elapsed = P_new['t'] - P['t']
+                weight_new = adjusted_secondary_weight(P_new_arr, time_elapsed, mcdc)
+                split_number = P_new['w'] / weight_new
+                N_split = math.floor(split_number)
+                if rng(P_arr) < split_number - N_split:
+                    N_split += 1
+                P_new['w'] = weight_new
+                N_bank = N_split
+        """
+        if N_bank == 0:
             continue
 
         # Bank
         idx_census = mcdc["idx_census"]
         if P_new["t"] > mcdc["setting"]["census_time"][idx_census]:
-            adapt.add_census(P_new_arr, prog)
+            for i in range(N_bank):
+                adapt.add_census(P_new_arr, prog)
         elif mcdc["setting"]["mode_eigenvalue"]:
-            adapt.add_census(P_new_arr, prog)
+            for i in range(N_bank):
+                adapt.add_census(P_new_arr, prog)
         else:
             # Keep it if it is the last particle
             if n == N - 1:
-                P["alive"] = True
-                P["ux"] = P_new["ux"]
-                P["uy"] = P_new["uy"]
-                P["uz"] = P_new["uz"]
-                P["t"] = P_new["t"]
-                P["g"] = P_new["g"]
-                P["E"] = P_new["E"]
-                P["w"] = P_new["w"]
-                P["distance_traveled"] = 0.0
+                for i in range(N_bank):
+                    if i == N_bank - 1:
+                        P["alive"] = True
+                        P["ux"] = P_new["ux"]
+                        P["uy"] = P_new["uy"]
+                        P["uz"] = P_new["uz"]
+                        P["t"] = P_new["t"]
+                        P["g"] = P_new["g"]
+                        P["E"] = P_new["E"]
+                        P["w"] = P_new["w"]
+                        P["distance_traveled"] = 0.0
+                    else:
+                        adapt.add_active(P_new_arr, prog)
             else:
-                adapt.add_active(P_new_arr, prog)
+                for i in range(N_bank):
+                    adapt.add_active(P_new_arr, prog)
 
 
 @njit

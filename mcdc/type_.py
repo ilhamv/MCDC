@@ -982,7 +982,7 @@ def make_type_technique(input_deck):
     Nt = len(card["ma_time_grid"])
     struct += [
         ("ma_time_grid", float64, (Nt,)),
-        ("ma_time_constant", float64, (Nt - 1,)),
+        ("ma_flux", float64, (Nt,)),
     ]
 
     # =========================================================================

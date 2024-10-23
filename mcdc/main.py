@@ -986,7 +986,7 @@ def prepare():
     # =========================================================================
 
     mcdc["technique"]["ma_time_grid"] = input_deck.technique["ma_time_grid"]
-    mcdc["technique"]["ma_time_constant"] = input_deck.technique["ma_time_constant"]
+    mcdc["technique"]["ma_flux"] = input_deck.technique["ma_flux"]
 
     # =========================================================================
     # Domain Decomposition

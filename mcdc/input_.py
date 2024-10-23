@@ -1206,11 +1206,11 @@ def branchless_collision():
     card["weighted_emission"] = False
 
 
-def multiplicity_adjustment(time_grid, time_constant):
+def multiplicity_adjustment(time_grid, flux):
     card = global_.input_deck.technique
     card["multiplicity_adjustment"] = True
     card["ma_time_grid"] = time_grid
-    card["ma_time_constant"] = time_constant
+    card["ma_flux"] = flux
 
 
 def time_census(t):

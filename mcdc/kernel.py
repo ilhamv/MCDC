@@ -2724,16 +2724,16 @@ def tmp_get_nu(t, rho_max):
     nu_min = 1.0 / (1.0 - beta * rho_min)
     nu_max = 1.0 / (1.0 - beta * rho_max)
 
-    if t >= 0.715 and t <= 0.755:
+    if t >= 0.015 and t <= 0.055:
         return 0.5 * (
             (nu_min + nu_max)
-            + math.sin((t - 0.715) / dt * 2.0 * math.pi - 0.5 * math.pi)
+            + math.sin((t - 0.015) / dt * 2.0 * math.pi - 0.5 * math.pi)
             * (nu_max - nu_min)
         )
-    elif t >= 0.815 and t <= 0.855:
+    elif t >= 0.115 and t <= 0.155:
         return 0.5 * (
             (nu_min + nu_max)
-            + math.sin((t - 0.815) / dt * 2.0 * math.pi - 0.5 * math.pi)
+            + math.sin((t - 0.115) / dt * 2.0 * math.pi - 0.5 * math.pi)
             * (nu_max - nu_min)
         )
     else:
@@ -2833,22 +2833,23 @@ def fission(P_arr, prog):
         else:
             sample_phasespace_fission_nuclide(P_arr, nuclide, P_new_arr, mcdc)
 
-        """
-        if P_new["t"] > P['t']:
-            t0 = P['t']
-            tmax = mcdc['setting']['time_boundary']
+        delayed_emission = P_new["t"] > P["t"]
+
+        if delayed_emission and mcdc["technique"]["forced_DNP_decay"]:
+            t0 = P["t"]
+            tmax = mcdc["setting"]["time_boundary"]
             dt = tmax - t0
             decay = 0.1
             emission_time = t0 + rng(P_arr) * dt
             denominator = 1.0 / dt
             numerator = 0.1 * math.exp(-decay * (emission_time - t0))
-            P_new['w'] *= numerator / denominator
-            P_new['t'] = emission_time
-        """
+            P_new["w"] *= numerator / denominator
+            P_new["t"] = emission_time
 
         # Skip if it's beyond time boundary
         if P_new["t"] > mcdc["setting"]["time_boundary"]:
             continue
+
         """
         # Delayed?
         if mcdc["technique"]["multiplicity_adjustment"]:
@@ -2862,6 +2863,7 @@ def fission(P_arr, prog):
                 P_new['w'] = weight_new
                 N_bank = N_split
         """
+
         if N_bank == 0:
             continue
 
@@ -3127,12 +3129,16 @@ def branchless_collision(P_arr, prog):
 
     material = mcdc["materials"][P["material_ID"]]
 
+    # Inducing parameters
+    t_old = P["t"]
+
     # Adjust weight
     SigmaT = get_MacroXS(XS_TOTAL, material, P_arr, mcdc)
     n_scatter = get_MacroXS(XS_NU_SCATTER, material, P_arr, mcdc)
     n_fission = get_MacroXS(XS_NU_FISSION, material, P_arr, mcdc) / mcdc["k_eff"]
     n_total = n_fission + n_scatter
-    P["w"] *= n_total / SigmaT
+    # P["w"] *= n_total / SigmaT
+    P["w"] *= tmp_get_nu(P["t"], mcdc["setting"]["tmp_rho_max"])
 
     P_rec_arr = adapt.local_array(1, type_.particle_record)
 
@@ -3145,6 +3151,19 @@ def branchless_collision(P_arr, prog):
         else:
             nuclide = sample_nuclide(material, P_arr, XS_NU_FISSION, mcdc)
             sample_phasespace_fission_nuclide(P_arr, nuclide, P_arr, mcdc)
+
+        delayed_emission = P["t"] > t_old
+
+        if delayed_emission and mcdc["technique"]["forced_DNP_decay"]:
+            t0 = t_old
+            tmax = mcdc["setting"]["time_boundary"]
+            dt = tmax - t0
+            decay = 0.1
+            emission_time = t0 + rng(P_arr) * dt
+            denominator = 1.0 / dt
+            numerator = 0.1 * math.exp(-decay * (emission_time - t0))
+            P["w"] *= numerator / denominator
+            P["t"] = emission_time
 
         # Beyond time census or time boundary?
         idx_census = mcdc["idx_census"]

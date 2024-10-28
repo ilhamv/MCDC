@@ -1363,6 +1363,11 @@ def domain_decomposition(
     return card
 
 
+def forced_DNP_decay():
+    card = global_.input_deck.technique
+    card["forced_DNP_decay"] = True
+
+
 def iQMC(
     phi0=None,
     g=None,

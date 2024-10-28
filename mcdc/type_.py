@@ -929,6 +929,7 @@ def make_type_technique(input_deck):
         ("domain_decomposition", bool_),
         ("uq", bool_),
         ("multiplicity_adjustment", bool_),
+        ("forced_DNP_decay", bool_),
     ]
 
     # =========================================================================

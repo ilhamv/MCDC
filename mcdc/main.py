@@ -926,6 +926,7 @@ def prepare():
         "branchless_collision",
         "uq",
         "multiplicity_adjustment",
+        "forced_DNP_decay",
     ]:
         copy_field(mcdc["technique"], input_deck.technique, name)
 

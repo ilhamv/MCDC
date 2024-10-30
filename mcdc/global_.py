@@ -68,6 +68,7 @@ class InputDeck:
             "bank_census_buff": 1.0,
             # Portability
             "target": "cpu",
+            "tmp_rho_max": 0.0,
         }
 
         self.technique = {

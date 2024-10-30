@@ -24,6 +24,7 @@ from mcdc.input_ import (
     domain_decomposition,
     make_particle_bank,
     save_particle_bank,
+    tmp_rho_max,
 )
 import mcdc.tally
 from mcdc.main import (

@@ -1204,6 +1204,15 @@ def branchless_collision():
     card = global_.input_deck.technique
     card["branchless_collision"] = True
     card["weighted_emission"] = False
+    card["implicit_collision"] = True
+
+
+def multiplicity_adjustment(time_grid, flux):
+    card = global_.input_deck.technique
+    card["multiplicity_adjustment"] = True
+    card["implicit_collision"] = True
+    card["ma_time_grid"] = time_grid
+    card["ma_flux"] = flux
 
 
 def forced_DNP_decay(time_grid):

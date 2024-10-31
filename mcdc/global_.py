@@ -141,8 +141,12 @@ class InputDeck:
             "IC_neutron_density_max": 0.0,
             "IC_precursor_density_max": 0.0,
             "IC_cycle_stretch": 1.0,
+            "implicit_collision": False,
             "branchless_collision": False,
             "uq": False,
+            "multiplicity_adjustment": False,
+            "ma_time_grid": np.array([0.0, INF]),
+            "ma_flux": np.array([1.0, 1.0]),
             "forced_DNP_decay": False,
             "fDNPd_time_grid": np.array([0.0, INF]),
         }

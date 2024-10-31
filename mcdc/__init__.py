@@ -25,6 +25,7 @@ from mcdc.input_ import (
     make_particle_bank,
     save_particle_bank,
     tmp_rho_max,
+    multiplicity_adjustment,
     forced_DNP_decay,
 )
 import mcdc.tally

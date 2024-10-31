@@ -219,6 +219,7 @@ def make_type_particle(input_deck):
         ("fresh", bool_),
         ("event", int64),
         ("rng_seed", uint64),
+        ("distance_traveled", float64),
     ]
 
     # Get modes
@@ -924,7 +925,9 @@ def make_type_technique(input_deck):
         ("weight_roulette", bool_),
         ("iQMC", bool_),
         ("IC_generator", bool_),
+        ("implicit_collision", bool_),
         ("branchless_collision", bool_),
+        ("multiplicity_adjustment", bool_),
         ("domain_decomposition", bool_),
         ("uq", bool_),
         ("forced_DNP_decay", bool_),
@@ -983,6 +986,17 @@ def make_type_technique(input_deck):
     # Constants
     struct += [("wr_threshold", float64), ("wr_survive", float64)]
 
+    # =========================================================================
+    # Multiplicity adjustment
+    # =========================================================================
+
+    Nt = len(card["ma_time_grid"])
+    struct += [
+        ("ma_time_grid", float64, (Nt,)),
+        ("ma_flux", float64, (Nt,)),
+    ]
+
+    # =========================================================================
     # =========================================================================
     # Quasi Monte Carlo
     # =========================================================================

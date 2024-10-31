@@ -515,12 +515,8 @@ def step_particle(P_arr, data, prog):
         if mcdc["technique"]["IC_generator"] and mcdc["cycle_active"]:
             kernel.bank_IC(P_arr, prog)
 
-        # Branchless collision?
-        if mcdc["technique"]["branchless_collision"]:
-            kernel.branchless_collision(P_arr, prog)
-
         # Analog collision
-        else:
+        if not mcdc["technique"]["implicit_collision"]:
             # Get collision type
             kernel.collision(P_arr, mcdc)
 
@@ -533,6 +529,10 @@ def step_particle(P_arr, data, prog):
 
             elif P["event"] & EVENT_FISSION:
                 kernel.fission(P_arr, prog)
+
+        # Implicit collision
+        else:
+            kernel.implicit_collision(P_arr, prog)
 
     # Surface and domain crossing
     if P["event"] & EVENT_SURFACE_CROSSING:

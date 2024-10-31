@@ -1036,6 +1036,8 @@ def get_particle(P_arr, bank, mcdc):
     P["cell_ID"] = -1
     P["surface_ID"] = -1
     P["event"] = -1
+
+    P["distance_traveled"] = 0.0
     return True
 
 
@@ -2369,6 +2371,7 @@ def move_to_event(P_arr, data, mcdc):
 
     # Move particle
     move_particle(P_arr, distance, mcdc)
+    P["distance_traveled"] += distance
 
 
 @njit
@@ -2498,6 +2501,7 @@ def scattering(P_arr, prog):
             P["g"] = P_new["g"]
             P["E"] = P_new["E"]
             P["w"] = P_new["w"]
+            P["distance_traveled"] = 0.0
         else:
             adapt.add_active(P_new_arr, prog)
 
@@ -2816,6 +2820,7 @@ def fission(P_arr, prog):
                     P["g"] = P_new["g"]
                     P["E"] = P_new["E"]
                     P["w"] = P_new["w"]
+                    P["distance_traveled"] = 0.0
                 else:
                     adapt.add_active(P_new_arr, prog)
             continue
@@ -2848,6 +2853,7 @@ def fission(P_arr, prog):
                     P["g"] = P_new["g"]
                     P["E"] = P_new["E"]
                     P["w"] = P_new["w"]
+                    P["distance_traveled"] = 0.0
                 else:
                     adapt.add_active(P_new_arr, prog)
 
@@ -2882,6 +2888,7 @@ def fission(P_arr, prog):
                     P["g"] = P_new["g"]
                     P["E"] = P_new["E"]
                     P["w"] = P_new["w"]
+                    P["distance_traveled"] = 0.0
                 else:
                     adapt.add_active(P_new_arr, prog)
 
@@ -3122,44 +3129,168 @@ def fission_CE(P_arr, nuclide, P_new_arr):
 
 
 # =============================================================================
-# Branchless collision
+# Implicit collision
 # =============================================================================
 
 
 @njit
-def branchless_collision(P_arr, prog):
+def weight_adjustment_factor(time_start, time_end, time_grid, flux):
+    factor = 1.0
+
+    if time_end <= time_grid[0] or time_start >= time_grid[-1]:
+        return factor
+
+    time_end = min(time_end, time_grid[-1])
+    time_start = max(time_start, time_grid[0])
+
+    # Search XS energy bin index
+    idx_start = binary_search(time_start, time_grid)
+    idx_end = binary_search(time_end, time_grid)
+
+    if idx_start == -1:
+        idx_start = 0
+
+    # Linear interpolation
+    t1 = time_grid[idx_start]
+    t2 = time_grid[idx_start + 1]
+    flux1 = flux[idx_start]
+    flux2 = flux[idx_start + 1]
+    flux_start = flux1 + (time_start - t1) * (flux2 - flux1) / (t2 - t1)
+
+    t1 = time_grid[idx_end]
+    t2 = time_grid[idx_end + 1]
+    flux1 = flux[idx_end]
+    flux2 = flux[idx_end + 1]
+    flux_end = flux1 + (time_end - t1) * (flux2 - flux1) / (t2 - t1)
+
+    return flux_end / flux_start
+
+
+@njit
+def implicit_collision(P_arr, prog):
     P = P_arr[0]
     mcdc = adapt.mcdc_global(prog)
 
+    # Parameters
     material = mcdc["materials"][P["material_ID"]]
 
-    # Adjust weight
+    # Kill the current particle
+    P["alive"] = False
+
+    # Total weight of the secondaries
     SigmaT = get_MacroXS(XS_TOTAL, material, P_arr, mcdc)
     n_scatter = get_MacroXS(XS_NU_SCATTER, material, P_arr, mcdc)
     n_fission = get_MacroXS(XS_NU_FISSION, material, P_arr, mcdc) / mcdc["k_eff"]
     n_total = n_fission + n_scatter
-    P["w"] *= n_total / SigmaT
+    w_total = P["w"] * n_total / SigmaT
 
-    P_rec_arr = adapt.local_array(1, type_.particle_record)
+    # Secondary weight
+    if mcdc["technique"]["branchless_collision"]:
+        w_new = w_total
+    elif mcdc["technique"]["multiplicity_adjustment"]:
+        speed = physics.get_speed(P_arr, mcdc)
+        time_elapsed = P["distance_traveled"] / speed
 
-    # Set spectrum and decay rate
-    if rng(P_arr) < n_scatter / n_total:
-        sample_phasespace_scattering(P_arr, material, P_arr, mcdc)
-    else:
-        if mcdc["setting"]["mode_MG"]:
-            decay = sample_phasespace_fission(P_arr, material, P_arr, mcdc)
+        time_end = P["t"]
+        time_start = time_end - time_elapsed
+
+        time_grid = mcdc["technique"]["ma_time_grid"]
+        flux = mcdc["technique"]["ma_flux"]
+        factor = weight_adjustment_factor(time_start, time_end, time_grid, flux)
+
+        w_new = P["w"] * factor
+
+    # Multiplicity and number of productions
+    nu = w_total / w_new
+    N = int(math.floor(nu + rng(P_arr)))
+
+    # Secondary particle container
+    P_new_arr = adapt.local_array(1, type_.particle_record)
+    P_new = P_new_arr[0]
+
+    # Generate the secondaries
+    for n in range(N):
+        # Create new particle
+        split_as_record(P_new_arr, P_arr)
+
+        # Set weight
+        P_new["w"] = w_new
+
+        # Scattering
+        if rng(P_arr) < n_scatter / n_total:
+            fission = False
+
+            sample_phasespace_scattering(P_arr, material, P_new_arr, mcdc)
+
+        # Fission
         else:
-            nuclide = sample_nuclide(material, P_arr, XS_NU_FISSION, mcdc)
-            decay = sample_phasespace_fission_nuclide(P_arr, nuclide, P_arr, mcdc)
+            fission = True
 
-            # Beyond time census or time boundary?
+            if mcdc["setting"]["mode_MG"]:
+                decay = sample_phasespace_fission(P_arr, material, P_new_arr, mcdc)
+            else:
+                nuclide = sample_nuclide(material, P_arr, XS_NU_FISSION, mcdc)
+                decay = sample_phasespace_fission_nuclide(
+                    P_arr, nuclide, P_new_arr, mcdc
+                )
+
+        # Prompt?
+        prompt = P_new["t"] == P["t"]
+
+        # Bank particle if prompt
+        if prompt:
+            # To fission bank
+            if fission and mcdc["setting"]["mode_eigenvalue"]:
+                adapt.add_census(P_new_arr, prog)
+
+            # To active bank
+            else:
+                # Keep it if it is the last particle
+                if n == N - 1:
+                    P["alive"] = True
+                    P["ux"] = P_new["ux"]
+                    P["uy"] = P_new["uy"]
+                    P["uz"] = P_new["uz"]
+                    P["t"] = P_new["t"]
+                    P["g"] = P_new["g"]
+                    P["E"] = P_new["E"]
+                    P["w"] = P_new["w"]
+                    P["distance_traveled"] = 0.0
+                else:
+                    adapt.add_active(P_new_arr, prog)
+            continue
+        # DELAYED EMISSION TREATMENTS BELOW
+
+        # Analog delayed emission
+        if not mcdc["technique"]["forced_DNP_decay"]:
+            # Skip if it's beyond time boundary
+            if P_new["t"] > mcdc["setting"]["time_boundary"]:
+                continue
+
+            # Store particle to census bank?
             idx_census = mcdc["idx_census"]
-            if P["t"] > mcdc["setting"]["census_time"][idx_census]:
-                P["alive"] = False
-                split_as_record(P_rec_arr, P_arr)
-                adapt.add_active(P_rec_arr, prog)
-            elif P["t"] > mcdc["setting"]["time_boundary"]:
-                P["alive"] = False
+            if P_new["t"] > mcdc["setting"]["census_time"][idx_census]:
+                adapt.add_census(P_new_arr, prog)
+
+            # Store to fission bank?
+            elif mcdc["setting"]["mode_eigenvalue"]:
+                adapt.add_census(P_new_arr, prog)
+
+            # Store to active bank
+            else:
+                # Keep it if it is the last particle
+                if n == N - 1:
+                    P["alive"] = True
+                    P["ux"] = P_new["ux"]
+                    P["uy"] = P_new["uy"]
+                    P["uz"] = P_new["uz"]
+                    P["t"] = P_new["t"]
+                    P["g"] = P_new["g"]
+                    P["E"] = P_new["E"]
+                    P["w"] = P_new["w"]
+                    P["distance_traveled"] = 0.0
+                else:
+                    adapt.add_active(P_new_arr, prog)
 
 
 # =============================================================================
@@ -3264,7 +3395,8 @@ def get_MacroXS(type_, material, P_arr, mcdc):
             scatter = material["scatter"][g]
             return nu * scatter
         elif type_ == XS_NU_FISSION:
-            nu = material["nu_f"][g]
+            # nu = material["nu_f"][g]
+            nu = tmp_get_nu(P["t"], mcdc["setting"]["tmp_rho_max"])
             fission = material["fission"][g]
             return nu * fission
         elif type_ == XS_NU_FISSION_PROMPT:

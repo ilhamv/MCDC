@@ -821,7 +821,9 @@ def prepare():
         "weight_roulette",
         "iQMC",
         "IC_generator",
+        "implicit_collision",
         "branchless_collision",
+        "multiplicity_adjustment",
         "uq",
         "forced_DNP_decay",
     ]:
@@ -884,6 +886,14 @@ def prepare():
 
     # Survival probability
     mcdc["technique"]["wr_survive"] = input_deck.technique["wr_survive"]
+
+    # =========================================================================
+    # Multiplicity adjustment
+    # =========================================================================
+
+    mcdc["technique"]["ma_time_grid"] = input_deck.technique["ma_time_grid"]
+    mcdc["technique"]["ma_flux"] = input_deck.technique["ma_flux"]
+
     # =========================================================================
     # Domain Decomposition
     # =========================================================================

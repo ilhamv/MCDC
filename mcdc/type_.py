@@ -927,6 +927,7 @@ def make_type_technique(input_deck):
         ("branchless_collision", bool_),
         ("domain_decomposition", bool_),
         ("uq", bool_),
+        ("forced_DNP_decay", bool_),
     ]
 
     # =========================================================================
@@ -953,6 +954,15 @@ def make_type_technique(input_deck):
     struct += [("dd_yn_neigh", int64, (len(card["dd_yn_neigh"]),))]
     struct += [("dd_zp_neigh", int64, (len(card["dd_zp_neigh"]),))]
     struct += [("dd_zn_neigh", int64, (len(card["dd_zn_neigh"]),))]
+
+    # =========================================================================
+    # Forced DNP decay
+    # =========================================================================
+
+    Nt = len(card["fDNPd_time_grid"])
+    struct += [
+        ("fDNPd_time_grid", float64, (Nt,)),
+    ]
 
     # =========================================================================
     # Weight window

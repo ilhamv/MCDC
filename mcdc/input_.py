@@ -1206,6 +1206,12 @@ def branchless_collision():
     card["weighted_emission"] = False
 
 
+def forced_DNP_decay(time_grid):
+    card = global_.input_deck.technique
+    card["forced_DNP_decay"] = True
+    card["fDNPd_time_grid"] = time_grid
+
+
 def time_census(t):
     """
     Set time-census boundaries.

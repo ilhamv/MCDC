@@ -2792,33 +2792,100 @@ def fission(P_arr, prog):
 
         # Sample fission neutron phase space
         if mcdc["setting"]["mode_MG"]:
-            sample_phasespace_fission(P_arr, material, P_new_arr, mcdc)
+            decay = sample_phasespace_fission(P_arr, material, P_new_arr, mcdc)
         else:
-            sample_phasespace_fission_nuclide(P_arr, nuclide, P_new_arr, mcdc)
+            decay = sample_phasespace_fission_nuclide(P_arr, nuclide, P_new_arr, mcdc)
 
-        # Skip if it's beyond time boundary
-        if P_new["t"] > mcdc["setting"]["time_boundary"]:
-            continue
+        # Prompt?
+        prompt = P_new["t"] == P["t"]
 
-        # Bank
-        idx_census = mcdc["idx_census"]
-        if P_new["t"] > mcdc["setting"]["census_time"][idx_census]:
-            adapt.add_census(P_new_arr, prog)
-        elif mcdc["setting"]["mode_eigenvalue"]:
-            adapt.add_census(P_new_arr, prog)
-        else:
-            # Keep it if it is the last particle
-            if n == N - 1:
-                P["alive"] = True
-                P["ux"] = P_new["ux"]
-                P["uy"] = P_new["uy"]
-                P["uz"] = P_new["uz"]
-                P["t"] = P_new["t"]
-                P["g"] = P_new["g"]
-                P["E"] = P_new["E"]
-                P["w"] = P_new["w"]
+        # Bank particle if prompt
+        if prompt:
+            # To fission bank
+            if mcdc["setting"]["mode_eigenvalue"]:
+                adapt.add_census(P_new_arr, prog)
+            # To active bank
             else:
-                adapt.add_active(P_new_arr, prog)
+                # Keep it if it is the last particle
+                if n == N - 1:
+                    P["alive"] = True
+                    P["ux"] = P_new["ux"]
+                    P["uy"] = P_new["uy"]
+                    P["uz"] = P_new["uz"]
+                    P["t"] = P_new["t"]
+                    P["g"] = P_new["g"]
+                    P["E"] = P_new["E"]
+                    P["w"] = P_new["w"]
+                else:
+                    adapt.add_active(P_new_arr, prog)
+            continue
+        # DELAYED EMISSION TREATMENTS BELOW
+
+        # Analog delayed emission
+        if not mcdc["technique"]["forced_DNP_decay"]:
+            # Skip if it's beyond time boundary
+            if P_new["t"] > mcdc["setting"]["time_boundary"]:
+                continue
+
+            # Store particle to census bank?
+            idx_census = mcdc["idx_census"]
+            if P_new["t"] > mcdc["setting"]["census_time"][idx_census]:
+                adapt.add_census(P_new_arr, prog)
+
+            # Store to fission bank?
+            elif mcdc["setting"]["mode_eigenvalue"]:
+                adapt.add_census(P_new_arr, prog)
+
+            # Store to active bank
+            else:
+                # Keep it if it is the last particle
+                if n == N - 1:
+                    P["alive"] = True
+                    P["ux"] = P_new["ux"]
+                    P["uy"] = P_new["uy"]
+                    P["uz"] = P_new["uz"]
+                    P["t"] = P_new["t"]
+                    P["g"] = P_new["g"]
+                    P["E"] = P_new["E"]
+                    P["w"] = P_new["w"]
+                else:
+                    adapt.add_active(P_new_arr, prog)
+
+        # Forced decay
+        else:
+            # TODO: Support for time census
+            time_grid = mcdc["technique"]["fDNPd_time_grid"]
+            t_origin = P["t"]
+            w_origin = P_new["w"]
+
+            idx_start = max(0, binary_search(t_origin, time_grid))
+            N_decay = len(time_grid) - idx_start - 1
+
+            t0 = t_origin
+            for idx in range(idx_start, idx_start + N_decay):
+                t1 = time_grid[idx + 1]
+                dt = t1 - t0
+
+                emission_time = t0 + rng(P_arr) * dt
+                denominator = 1.0 / dt
+                numerator = decay * math.exp(-decay * (emission_time - t_origin))
+                P_new["w"] = w_origin * numerator / denominator
+                P_new["t"] = emission_time
+
+                # Keep it if it is the last particle
+                if idx == idx_start + N_decay - 1:
+                    P["alive"] = True
+                    P["ux"] = P_new["ux"]
+                    P["uy"] = P_new["uy"]
+                    P["uz"] = P_new["uz"]
+                    P["t"] = P_new["t"]
+                    P["g"] = P_new["g"]
+                    P["E"] = P_new["E"]
+                    P["w"] = P_new["w"]
+                else:
+                    adapt.add_active(P_new_arr, prog)
+
+                t0 = t1
 
 
 @njit
@@ -2849,6 +2916,7 @@ def sample_phasespace_fission(P_arr, material, P_new_arr, mcdc):
     if xi < tot:
         prompt = True
         spectrum = material["chi_p"][g]
+        decay = INF
     else:
         prompt = False
 
@@ -2891,6 +2959,8 @@ def sample_phasespace_fission(P_arr, material, P_new_arr, mcdc):
         xi = rng(P_new_arr)
         P_new["t"] -= math.log(xi) / decay
 
+    return decay
+
 
 @njit
 def sample_phasespace_fission_nuclide(P_arr, nuclide, P_new_arr, mcdc):
@@ -2906,9 +2976,11 @@ def sample_phasespace_fission_nuclide(P_arr, nuclide, P_new_arr, mcdc):
     P_new["ux"], P_new["uy"], P_new["uz"] = sample_isotropic_direction(P_new_arr)
 
     if mcdc["setting"]["mode_MG"]:
-        fission_MG(P_arr, nuclide, P_new_arr)
+        decay = fission_MG(P_arr, nuclide, P_new_arr)
     else:
-        fission_CE(P_arr, nuclide, P_new_arr)
+        decay = fission_CE(P_arr, nuclide, P_new_arr)
+
+    return decay
 
 
 @njit
@@ -2930,6 +3002,7 @@ def fission_MG(P_arr, nuclide, P_new_arr):
     if xi < tot:
         prompt = True
         spectrum = nuclide["chi_p"][g]
+        decay = INF
     else:
         prompt = False
 
@@ -2954,6 +3027,8 @@ def fission_MG(P_arr, nuclide, P_new_arr):
     if not prompt:
         xi = rng(P_new_arr)
         P_new["t"] -= math.log(xi) / decay
+
+    return decay
 
 
 @njit
@@ -2992,6 +3067,7 @@ def fission_CE(P_arr, nuclide, P_new_arr):
         P_new["E"] = sample_Eout(
             P_new_arr, nuclide["E_chi_p"], nuclide["NE_chi_p"], nuclide["ce_chi_p"]
         )
+        decay = INF
     else:
         if delayed_group == 0:
             P_new["E"] = sample_Eout(
@@ -3039,7 +3115,10 @@ def fission_CE(P_arr, nuclide, P_new_arr):
     # Sample emission time
     if not prompt:
         xi = rng(P_new_arr)
-        P_new["t"] -= math.log(xi) / nuclide["ce_decay"][delayed_group]
+        decay = nuclide["ce_decay"][delayed_group]
+        P_new["t"] -= math.log(xi) / decay
+
+    return decay
 
 
 # =============================================================================
@@ -3068,10 +3147,10 @@ def branchless_collision(P_arr, prog):
         sample_phasespace_scattering(P_arr, material, P_arr, mcdc)
     else:
         if mcdc["setting"]["mode_MG"]:
-            sample_phasespace_fission(P_arr, material, P_arr, mcdc)
+            decay = sample_phasespace_fission(P_arr, material, P_arr, mcdc)
         else:
             nuclide = sample_nuclide(material, P_arr, XS_NU_FISSION, mcdc)
-            sample_phasespace_fission_nuclide(P_arr, nuclide, P_arr, mcdc)
+            decay = sample_phasespace_fission_nuclide(P_arr, nuclide, P_arr, mcdc)
 
             # Beyond time census or time boundary?
             idx_census = mcdc["idx_census"]

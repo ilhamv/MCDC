@@ -823,6 +823,7 @@ def prepare():
         "IC_generator",
         "branchless_collision",
         "uq",
+        "forced_DNP_decay",
     ]:
         copy_field(mcdc["technique"], input_deck.technique, name)
 
@@ -867,6 +868,12 @@ def prepare():
     # WW windows
     mcdc["technique"]["ww"] = input_deck.technique["ww"]
     mcdc["technique"]["ww_width"] = input_deck.technique["ww_width"]
+
+    # =========================================================================
+    # Forced DNP decay
+    # =========================================================================
+
+    mcdc["technique"]["fDNPd_time_grid"] = input_deck.technique["fDNPd_time_grid"]
 
     # =========================================================================
     # Weight roulette

@@ -3292,6 +3292,42 @@ def implicit_collision(P_arr, prog):
                 else:
                     adapt.add_active(P_new_arr, prog)
 
+        # Forced decay
+        else:
+            # TODO: support for time census
+            t_origin = P["t"]
+            w_origin = P_new["w"]
+
+            t0 = t_origin
+            t1 = mcdc["setting"]["time_boundary"]
+            dt = t1 - t0
+
+            emission_time = t0 + rng(P_arr) * dt
+            denominator = 1.0 / dt
+            numerator = decay * math.exp(-decay * (emission_time - t_origin))
+            P_new["w"] = w_origin * numerator / denominator
+            P_new["t"] = emission_time
+
+            # Store to fission bank?
+            if mcdc["setting"]["mode_eigenvalue"]:
+                adapt.add_census(P_new_arr, prog)
+
+            # Store to active bank
+            else:
+                # Keep it if it is the last particle
+                if n == N - 1:
+                    P["alive"] = True
+                    P["ux"] = P_new["ux"]
+                    P["uy"] = P_new["uy"]
+                    P["uz"] = P_new["uz"]
+                    P["t"] = P_new["t"]
+                    P["g"] = P_new["g"]
+                    P["E"] = P_new["E"]
+                    P["w"] = P_new["w"]
+                    P["distance_traveled"] = 0.0
+                else:
+                    adapt.add_active(P_new_arr, prog)
+
 
 # =============================================================================
 # Weight widow

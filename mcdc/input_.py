@@ -1215,10 +1215,9 @@ def multiplicity_adjustment(time_grid, flux):
     card["ma_flux"] = flux
 
 
-def forced_DNP_decay(time_grid):
+def forced_DNP_decay():
     card = global_.input_deck.technique
     card["forced_DNP_decay"] = True
-    card["fDNPd_time_grid"] = time_grid
 
 
 def time_census(t):

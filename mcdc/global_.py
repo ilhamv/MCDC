@@ -148,7 +148,6 @@ class InputDeck:
             "ma_time_grid": np.array([0.0, INF]),
             "ma_flux": np.array([1.0, 1.0]),
             "forced_DNP_decay": False,
-            "fDNPd_time_grid": np.array([0.0, INF]),
         }
 
         self.uq_deltas = {

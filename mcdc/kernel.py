@@ -2800,99 +2800,49 @@ def fission(P_arr, prog):
         else:
             decay = sample_phasespace_fission_nuclide(P_arr, nuclide, P_new_arr, mcdc)
 
-        # Prompt?
-        prompt = P_new["t"] == P["t"]
+        # Delayed
+        delayed = P_new["t"] > P["t"]
 
-        # Bank particle if prompt
-        if prompt:
-            # To fission bank
-            if mcdc["setting"]["mode_eigenvalue"]:
-                adapt.add_census(P_new_arr, prog)
-            # To active bank
-            else:
-                # Keep it if it is the last particle
-                if n == N - 1:
-                    P["alive"] = True
-                    P["ux"] = P_new["ux"]
-                    P["uy"] = P_new["uy"]
-                    P["uz"] = P_new["uz"]
-                    P["t"] = P_new["t"]
-                    P["g"] = P_new["g"]
-                    P["E"] = P_new["E"]
-                    P["w"] = P_new["w"]
-                    P["distance_traveled"] = 0.0
-                else:
-                    adapt.add_active(P_new_arr, prog)
+        # Forced decay?
+        if delayed and mcdc["technique"]["forced_DNP_decay"]:
+            t_max = mcdc["setting"]["time_boundary"]
+            dt = t_max - P["t"]
+
+            P_new["t"] = P["t"] + rng(P_arr) * dt
+
+            denominator = 1.0 / dt
+            numerator = decay * math.exp(-decay * (P_new["t"] - P["t"]))
+            P_new["w"] = w_new * numerator / denominator
+
+        # Now, bank the particle
+        # Skip if it's beyond time boundary
+        if P_new["t"] > mcdc["setting"]["time_boundary"]:
             continue
-        # DELAYED EMISSION TREATMENTS BELOW
 
-        # Analog delayed emission
-        if not mcdc["technique"]["forced_DNP_decay"]:
-            # Skip if it's beyond time boundary
-            if P_new["t"] > mcdc["setting"]["time_boundary"]:
-                continue
+        # Store particle to census bank?
+        idx_census = mcdc["idx_census"]
+        if P_new["t"] > mcdc["setting"]["census_time"][idx_census]:
+            adapt.add_census(P_new_arr, prog)
 
-            # Store particle to census bank?
-            idx_census = mcdc["idx_census"]
-            if P_new["t"] > mcdc["setting"]["census_time"][idx_census]:
-                adapt.add_census(P_new_arr, prog)
+        # Store to fission bank?
+        elif mcdc["setting"]["mode_eigenvalue"]:
+            adapt.add_census(P_new_arr, prog)
 
-            # Store to fission bank?
-            elif mcdc["setting"]["mode_eigenvalue"]:
-                adapt.add_census(P_new_arr, prog)
-
-            # Store to active bank
-            else:
-                # Keep it if it is the last particle
-                if n == N - 1:
-                    P["alive"] = True
-                    P["ux"] = P_new["ux"]
-                    P["uy"] = P_new["uy"]
-                    P["uz"] = P_new["uz"]
-                    P["t"] = P_new["t"]
-                    P["g"] = P_new["g"]
-                    P["E"] = P_new["E"]
-                    P["w"] = P_new["w"]
-                    P["distance_traveled"] = 0.0
-                else:
-                    adapt.add_active(P_new_arr, prog)
-
-        # Forced decay
+        # Store to active bank
         else:
-            # TODO: Support for time census
-            time_grid = mcdc["technique"]["fDNPd_time_grid"]
-            t_origin = P["t"]
-            w_origin = P_new["w"]
-
-            idx_start = max(0, binary_search(t_origin, time_grid))
-            N_decay = len(time_grid) - idx_start - 1
-
-            t0 = t_origin
-            for idx in range(idx_start, idx_start + N_decay):
-                t1 = time_grid[idx + 1]
-                dt = t1 - t0
-
-                emission_time = t0 + rng(P_arr) * dt
-                denominator = 1.0 / dt
-                numerator = decay * math.exp(-decay * (emission_time - t_origin))
-                P_new["w"] = w_origin * numerator / denominator
-                P_new["t"] = emission_time
-
-                # Keep it if it is the last particle
-                if idx == idx_start + N_decay - 1:
-                    P["alive"] = True
-                    P["ux"] = P_new["ux"]
-                    P["uy"] = P_new["uy"]
-                    P["uz"] = P_new["uz"]
-                    P["t"] = P_new["t"]
-                    P["g"] = P_new["g"]
-                    P["E"] = P_new["E"]
-                    P["w"] = P_new["w"]
-                    P["distance_traveled"] = 0.0
-                else:
-                    adapt.add_active(P_new_arr, prog)
-
-                t0 = t1
+            # Keep it if it is the last particle
+            if n == N - 1:
+                P["alive"] = True
+                P["ux"] = P_new["ux"]
+                P["uy"] = P_new["uy"]
+                P["uz"] = P_new["uz"]
+                P["t"] = P_new["t"]
+                P["g"] = P_new["g"]
+                P["E"] = P_new["E"]
+                P["w"] = P_new["w"]
+                P["distance_traveled"] = 0.0
+            else:
+                adapt.add_active(P_new_arr, prog)
 
 
 @njit
@@ -3234,99 +3184,49 @@ def implicit_collision(P_arr, prog):
                     P_arr, nuclide, P_new_arr, mcdc
                 )
 
-        # Prompt?
-        prompt = P_new["t"] == P["t"]
+        # Delayed
+        delayed = P_new["t"] > P["t"]
 
-        # Bank particle if prompt
-        if prompt:
-            # To fission bank
-            if fission and mcdc["setting"]["mode_eigenvalue"]:
-                adapt.add_census(P_new_arr, prog)
+        # Forced decay?
+        if delayed and mcdc["technique"]["forced_DNP_decay"]:
+            t_max = mcdc["setting"]["time_boundary"]
+            dt = t_max - P["t"]
 
-            # To active bank
-            else:
-                # Keep it if it is the last particle
-                if n == N - 1:
-                    P["alive"] = True
-                    P["ux"] = P_new["ux"]
-                    P["uy"] = P_new["uy"]
-                    P["uz"] = P_new["uz"]
-                    P["t"] = P_new["t"]
-                    P["g"] = P_new["g"]
-                    P["E"] = P_new["E"]
-                    P["w"] = P_new["w"]
-                    P["distance_traveled"] = 0.0
-                else:
-                    adapt.add_active(P_new_arr, prog)
-            continue
-        # DELAYED EMISSION TREATMENTS BELOW
+            P_new["t"] = P["t"] + rng(P_arr) * dt
 
-        # Analog delayed emission
-        if not mcdc["technique"]["forced_DNP_decay"]:
-            # Skip if it's beyond time boundary
-            if P_new["t"] > mcdc["setting"]["time_boundary"]:
-                continue
-
-            # Store particle to census bank?
-            idx_census = mcdc["idx_census"]
-            if P_new["t"] > mcdc["setting"]["census_time"][idx_census]:
-                adapt.add_census(P_new_arr, prog)
-
-            # Store to fission bank?
-            elif mcdc["setting"]["mode_eigenvalue"]:
-                adapt.add_census(P_new_arr, prog)
-
-            # Store to active bank
-            else:
-                # Keep it if it is the last particle
-                if n == N - 1:
-                    P["alive"] = True
-                    P["ux"] = P_new["ux"]
-                    P["uy"] = P_new["uy"]
-                    P["uz"] = P_new["uz"]
-                    P["t"] = P_new["t"]
-                    P["g"] = P_new["g"]
-                    P["E"] = P_new["E"]
-                    P["w"] = P_new["w"]
-                    P["distance_traveled"] = 0.0
-                else:
-                    adapt.add_active(P_new_arr, prog)
-
-        # Forced decay
-        else:
-            # TODO: support for time census
-            t_origin = P["t"]
-            w_origin = P_new["w"]
-
-            t0 = t_origin
-            t1 = mcdc["setting"]["time_boundary"]
-            dt = t1 - t0
-
-            emission_time = t0 + rng(P_arr) * dt
             denominator = 1.0 / dt
-            numerator = decay * math.exp(-decay * (emission_time - t_origin))
-            P_new["w"] = w_origin * numerator / denominator
-            P_new["t"] = emission_time
+            numerator = decay * math.exp(-decay * (P_new["t"] - P["t"]))
+            P_new["w"] = w_new * numerator / denominator
 
-            # Store to fission bank?
-            if mcdc["setting"]["mode_eigenvalue"]:
-                adapt.add_census(P_new_arr, prog)
+        # Now, bank the particle
+        # Skip if it's beyond time boundary
+        if P_new["t"] > mcdc["setting"]["time_boundary"]:
+            continue
 
-            # Store to active bank
+        # Store particle to census bank?
+        idx_census = mcdc["idx_census"]
+        if P_new["t"] > mcdc["setting"]["census_time"][idx_census]:
+            adapt.add_census(P_new_arr, prog)
+
+        # Store to fission bank?
+        elif fission and mcdc["setting"]["mode_eigenvalue"]:
+            adapt.add_census(P_new_arr, prog)
+
+        # Store to active bank
+        else:
+            # Keep it if it is the last particle
+            if n == N - 1:
+                P["alive"] = True
+                P["ux"] = P_new["ux"]
+                P["uy"] = P_new["uy"]
+                P["uz"] = P_new["uz"]
+                P["t"] = P_new["t"]
+                P["g"] = P_new["g"]
+                P["E"] = P_new["E"]
+                P["w"] = P_new["w"]
+                P["distance_traveled"] = 0.0
             else:
-                # Keep it if it is the last particle
-                if n == N - 1:
-                    P["alive"] = True
-                    P["ux"] = P_new["ux"]
-                    P["uy"] = P_new["uy"]
-                    P["uz"] = P_new["uz"]
-                    P["t"] = P_new["t"]
-                    P["g"] = P_new["g"]
-                    P["E"] = P_new["E"]
-                    P["w"] = P_new["w"]
-                    P["distance_traveled"] = 0.0
-                else:
-                    adapt.add_active(P_new_arr, prog)
+                adapt.add_active(P_new_arr, prog)
 
 
 # =============================================================================

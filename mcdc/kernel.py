@@ -2812,7 +2812,7 @@ def fission(P_arr, prog):
 
             denominator = 1.0 / dt
             numerator = decay * math.exp(-decay * (P_new["t"] - P["t"]))
-            P_new["w"] = w_new * numerator / denominator
+            P_new["w"] = weight_new * numerator / denominator
 
         # Now, bank the particle
         # Skip if it's beyond time boundary
@@ -3199,34 +3199,54 @@ def implicit_collision(P_arr, prog):
             P_new["w"] = w_new * numerator / denominator
 
         # Now, bank the particle
+
         # Skip if it's beyond time boundary
         if P_new["t"] > mcdc["setting"]["time_boundary"]:
             continue
 
+        # Split the secondary?
+        N_bank = 1
+        if delayed and mcdc["technique"]["multiplicity_adjustment"]:
+            time_start = P["t"]
+            time_end = P_new["t"]
+            time_grid = mcdc["technique"]["ma_time_grid"]
+            flux = mcdc["technique"]["ma_flux"]
+            factor = weight_adjustment_factor(time_start, time_end, time_grid, flux)
+
+            w_target = w_new * factor
+
+            nu_bank = P_new["w"] / w_target
+
+            P_new["w"] = w_target
+            N_bank = int(math.floor(nu_bank + rng(P_arr)))
+
         # Store particle to census bank?
         idx_census = mcdc["idx_census"]
         if P_new["t"] > mcdc["setting"]["census_time"][idx_census]:
-            adapt.add_census(P_new_arr, prog)
+            for n_bank in range(N_bank):
+                adapt.add_census(P_new_arr, prog)
 
         # Store to fission bank?
         elif fission and mcdc["setting"]["mode_eigenvalue"]:
-            adapt.add_census(P_new_arr, prog)
+            for n_bank in range(N_bank):
+                adapt.add_census(P_new_arr, prog)
 
         # Store to active bank
         else:
-            # Keep it if it is the last particle
-            if n == N - 1:
-                P["alive"] = True
-                P["ux"] = P_new["ux"]
-                P["uy"] = P_new["uy"]
-                P["uz"] = P_new["uz"]
-                P["t"] = P_new["t"]
-                P["g"] = P_new["g"]
-                P["E"] = P_new["E"]
-                P["w"] = P_new["w"]
-                P["distance_traveled"] = 0.0
-            else:
-                adapt.add_active(P_new_arr, prog)
+            for n_bank in range(N_bank):
+                # Keep it if it is the last particle
+                if n == N - 1 and n_bank == N_bank - 1:
+                    P["alive"] = True
+                    P["ux"] = P_new["ux"]
+                    P["uy"] = P_new["uy"]
+                    P["uz"] = P_new["uz"]
+                    P["t"] = P_new["t"]
+                    P["g"] = P_new["g"]
+                    P["E"] = P_new["E"]
+                    P["w"] = P_new["w"]
+                    P["distance_traveled"] = 0.0
+                else:
+                    adapt.add_active(P_new_arr, prog)
 
 
 # =============================================================================

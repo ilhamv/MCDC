@@ -136,7 +136,6 @@ def prepare(simulationPy: Simulation):
     simulation = simulation_container[0]
 
     # Pick Python-version RNG if needed
-    import mcdc.config as config
     import mcdc.transport.rng as rng
 
     if config.mode == "python":
@@ -169,6 +168,15 @@ def prepare(simulationPy: Simulation):
     #             ][start:end]
     #             simulation["bank_source"]["size"] = N_local
     #     MPI.COMM_WORLD.Barrier()
+
+    # ==================================================================================
+    # Setup GPU-Related Data Structures, if Necessary
+    # ==================================================================================
+
+    if config.target == "gpu":
+        from mcdc.code_factory.gpu.program_builder import build_gpu_program
+        setup_gpu_program(mcdc_container, data)
+    
 
     # ==================================================================================
     # Finalize

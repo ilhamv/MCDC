@@ -42,6 +42,18 @@ type_map = {
     np.uintp: np.uintp,
 }
 
+size_map = {
+    bool: 1,
+    float: 8,
+    int: 8,
+    str: 32,
+    np.bool_: 1,
+    np.float64: 8,
+    np.int64: 8,
+    np.uint64:8,
+    np.str_: 32,
+}
+
 bank_names = ["bank_active", "bank_census", "bank_source", "bank_future"]
 
 
@@ -285,6 +297,24 @@ def generate_numba_layers(simulation):
         set_object(object_, annotations, structures, records, data)
     set_object(simulation, annotations, structures, records, data)
 
+    print("\n\n\nA\n\n\n",flush=True)
+    # Allocate the flattened data and re-set the objects
+    data["array"], data["pointer"] = create_data_array(data["size"], type_map[float],size_map[float])
+    print("\n\n\nB\n\n\n",flush=True)
+
+    data["size"] = 0
+    records = {}
+    for mcdc_class in mcdc_classes:
+        if issubclass(mcdc_class, ObjectNonSingleton):
+            records[mcdc_class.label] = []
+        else:
+            records[mcdc_class.label] = {}
+    records["simulation"] = records.pop("simulation")
+
+    for object_ in objects:
+        set_object(object_, annotations, structures, records, data, set_data=True)
+    set_object(simulation, annotations, structures, records, data, set_data=True)
+
     # ==================================================================================
     # Finalize the simulation object structure and set record
     # ==================================================================================
@@ -375,6 +405,8 @@ def generate_numba_layers(simulation):
         simulation_dtype
     )
     mcdc_simulation = mcdc_simulation_container[0]
+    mcdc_simulation["gpu_meta"]["global_pointer"] = mcdc_simulation_pointer
+    mcdc_simulation["gpu_meta"]["data_pointer"] = data["pointer"]
 
     record = records["simulation"]
     structure = structures["simulation"]
@@ -756,18 +788,23 @@ def set_object(
 # =============================================================================
 
 
-def create_data_array(size):
-    if not config.target == "gpu":
-        data = np.zeros(size, dtype=np.float64)
-        return data, 0
-    else:
-        return create_data_array_on_gpu(size * 8)
+def create_data_array(size, dtype, itemsize):
+    if config.target == "gpu":
+        import mcdc.code_factory.gpu.adapt as adapt
+        import harmonize, numba
 
-
-@njit
-def create_data_array_on_gpu(size):
-    if config.gpu_state_storage == "managed":
-        data_ptr = gpu_builder.alloc_managed_bytes(size)
+        print("\n\n\nW\n\n\n",flush=True)
+        print(f"Tally size is {size} with itemsize {itemsize}",flush=True)
+        if config.gpu_state_storage == "managed":
+            print("\n\n\nX\n\n\n",flush=True)
+            data_tally_ptr = harmonize.alloc_managed_bytes(size*itemsize)
+        else:
+            print("\n\n\nY\n\n\n",flush=True)
+            data_tally_ptr = harmonize.alloc_device_bytes(size*itemsize)
+        print("\n\n\nZ\n\n\n",flush=True)
+        data_tally_uint = adapt.voidptr_to_uintp(data_tally_ptr)
+        data_tally = numba.carray(data_tally_ptr, (size,), dtype)
+        return data_tally, data_tally_uint
     else:
         data_ptr = gpu_builder.alloc_device_bytes(size)
     data_uint = voidptr_to_uintp(data_ptr)

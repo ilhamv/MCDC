@@ -296,6 +296,33 @@ def build_gpu_program(data_size):
     complete = src_fns["complete"]
     clear_flags = src_fns["clear_flags"]
     set_device = src_fns["set_device"]
+    
+    src_alloc_program = src_fns["alloc_program"]
+    src_free_program = src_fns["free_program"]
+    src_load_global = src_fns["load_state_device_global"]
+    src_store_global = src_fns["store_state_device_global"]
+    src_store_pointer_global = src_fns["store_pointer_state_device_global"]
+    src_load_data = src_fns["load_state_device_data"]
+    src_store_data = src_fns["store_state_device_data"]
+    src_store_pointer_data = src_fns["store_pointer_state_device_data"]
+    src_init_program = src_fns["init_program"]
+    src_exec_program = src_fns["exec_program"]
+    src_complete = src_fns["complete"]
+    src_clear_flags = src_fns["clear_flags"]
+    src_set_device = src_fns["set_device"]
+
+    # ==================================================================================
+    #
+    # ==================================================================================
+
+    """
+    global loop_source
+    loop_source = gpu_loop_source
+    #
+    # Overwrite function
+    for impl in target_rosters["cpu"].values():
+        overwrite_func(impl, impl)
+    """
 
 
 # ======================================================================================

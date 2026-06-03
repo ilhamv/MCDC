@@ -174,8 +174,8 @@ def prepare(simulationPy: Simulation):
     # ==================================================================================
 
     if config.target == "gpu":
-        from mcdc.code_factory.gpu.program_builder import build_gpu_program
-        setup_gpu_program(mcdc_container, data)
+        from mcdc.code_factory.gpu.program_builder import setup_gpu_program
+        setup_gpu_program(simulation_container, data)
     
 
     # ==================================================================================

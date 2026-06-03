@@ -324,6 +324,9 @@ def build_gpu_program(data_size):
         overwrite_func(impl, impl)
     """
 
+    alloc_managed_bytes = harmonize.alloc_managed_bytes
+    alloc_device_bytes  = harmonize.alloc_device_bytes
+
 
 # ======================================================================================
 # Setup GPU

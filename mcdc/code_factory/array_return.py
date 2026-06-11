@@ -132,8 +132,6 @@ def array_result_overload(array):
             f"Expected array type argument for array_result, got {array}."
         )
 
-    print("OVER LOADED")
-
     def impl(array):
         return (into_voidptr(array), len(array))
 
@@ -252,7 +250,6 @@ def array_return_lowering(fn, elem_type):
             itemsize=context.get_constant(types.intp, itemsize),
             meminfo=None,
         )
-        print(ary._getvalue())
         return ary._getvalue()
 
     nb.extending.lower_builtin(fn, *sig.args)(builtin)

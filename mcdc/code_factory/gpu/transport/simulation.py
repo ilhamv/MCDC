@@ -40,10 +40,10 @@ def source_loop(seed, simulation, data):
         # Store the global state to the GPU
         if settings["gpu_storage"] == GPU_STORAGE_SEPARATE:
             harmonize.memcpy_host_to_device(
-                simulation["gpu_meta"]["state_pointer"], simulation
+                simulation["gpu_meta"]["simulation_pointer"], simulation
             )
             harmonize.memcpy_host_to_device(
-                simulation["gpu_meta"]["state_pointer"], data
+                simulation["gpu_meta"]["data_pointer"], data
             )
 
         # Execute the program, and continue to do so until it is done
@@ -163,10 +163,10 @@ def build_gpu_progs(input_deck, args):
         # src_store_global(mcdc["gpu_meta"]["state_pointer"], mcdc_array[0])
         if config.gpu_state_storage == "separate":
             harmonize.memcpy_device_to_host(
-                simulation, simulation["gpu_meta"]["state_pointer"]
+                simulation, simulation["gpu_meta"]["simulation_pointer"]
             )
             harmonize.memcpy_device_to_host(
-                data, simulation["gpu_meta"]["state_pointer"]
+                data, simulation["gpu_meta"]["data_pointer"]
             )
 
         gpu_module.clear_flags(simulation["gpu_meta"]["program_pointer"])

@@ -344,7 +344,6 @@ def setup_gpu_program(simulation_container, data):
 
     set_device(device_id)
     simulation["gpu_meta"]["state_pointer"] = cast_voidptr_to_uintp(alloc_state())
-
     if config.gpu_state_storage == "separate":
         store_pointer_state_device_simulation(
             simulation["gpu_meta"]["state_pointer"],
@@ -377,24 +376,33 @@ def teardown_gpu_program(simulation):
 # ======================================================================================
 
 
-def create_data_array(size, dtype):
-    if config.gpu_state_storage == "managed":
-        data_tally_ptr = harmonize.alloc_managed_bytes(size)
-    else:
-        data_tally_ptr = harmonize.alloc_device_bytes(size)
-    data_tally_uint = cast_voidptr_to_uintp(data_tally_ptr)
-    data_tally = nb.carray(data_tally_ptr, (size,), dtype)
-    return data_tally, data_tally_uint
+#def create_data_array(size, dtype):
+#    if config.gpu_state_storage == "managed":
+#        data_tally_ptr = harmonize.alloc_managed_bytes(size)
+#    else:
+#        data_tally_ptr = harmonize.alloc_device_bytes(size)
+#    data_tally_uint = cast_voidptr_to_uintp(data_tally_ptr)
+#    
+#    if config.gpu_state_storage == "separate":
+#        data_tally = nb.zeros( (size,),dtype=dtype)
+#    else:
+#        data_tally = nb.carray(data_tally_ptr, (size,), dtype)
+#    return data_tally, data_tally_uint
 
 
-def create_mcdc_container(dtype):
-    if config.gpu_state_storage == "managed":
-        mcdc_ptr = harmonize.alloc_managed_bytes(dtype.itemsize)
-    else:
-        mcdc_ptr = harmonize.alloc_device_bytes(dtype.itemsize)
-    mcdc_uint = cast_voidptr_to_uintp(mcdc_ptr)
-    mcdc_container = nb.carray(mcdc_ptr, (1,), dtype)
-    return mcdc_container, mcdc_uint
+#def create_mcdc_container(dtype):
+#    if config.gpu_state_storage == "managed":
+#        mcdc_ptr = harmonize.alloc_managed_bytes(dtype.itemsize)
+#    else:
+#        mcdc_ptr = harmonize.alloc_device_bytes(dtype.itemsize)
+#    
+#    mcdc_uint = cast_voidptr_to_uintp(mcdc_ptr)
+#    if config.gpu_state_storage == "separate":
+#        mcdc_tally = nb.zeros((size,),dtype=dtype)
+#    else:
+#        mcdc_tally = nb.carray(mcdc_ptr, (size,), dtype)
+#    mcdc_container = nb.carray(mcdc_ptr, (1,), dtype)
+#    return mcdc_container, mcdc_uint
 
 
 # ======================================================================================

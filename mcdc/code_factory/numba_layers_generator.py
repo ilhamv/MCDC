@@ -443,6 +443,9 @@ def generate_numba_layers(simulation):
     # Manually set particle bank attributes
     for name in bank_names:
         mcdc_simulation[name]["tag"] = getattr(simulation, name).tag
+    
+    mcdc_simulation["gpu_meta"]["simulation_pointer"] = mcdc_simulation_pointer
+    mcdc_simulation["gpu_meta"]["data_pointer"] = data["pointer"]
 
     # GPU program setup
     if config.target == "gpu":
@@ -788,28 +791,27 @@ def set_object(
 # =============================================================================
 
 
-def create_data_array(size, dtype, itemsize):
-    if config.target == "gpu":
-        import mcdc.code_factory.gpu.adapt as adapt
-        import harmonize, numba
-
-        print("\n\n\nW\n\n\n",flush=True)
-        print(f"Tally size is {size} with itemsize {itemsize}",flush=True)
-        if config.gpu_state_storage == "managed":
-            print("\n\n\nX\n\n\n",flush=True)
-            data_tally_ptr = harmonize.alloc_managed_bytes(size*itemsize)
-        else:
-            print("\n\n\nY\n\n\n",flush=True)
-            data_tally_ptr = harmonize.alloc_device_bytes(size*itemsize)
-        print("\n\n\nZ\n\n\n",flush=True)
-        data_tally_uint = adapt.voidptr_to_uintp(data_tally_ptr)
-        data_tally = numba.carray(data_tally_ptr, (size,), dtype)
-        return data_tally, data_tally_uint
+def create_data_array(size):
+    if not config.target == "gpu":
+        data = np.zeros(size, dtype=np.float64)
+        return data, 0
     else:
-        data_ptr = gpu_builder.alloc_device_bytes(size)
-    data_uint = voidptr_to_uintp(data_ptr)
-    data = nb.carray(data_ptr, (size,), dtype=np.float64)
-    return data, data_uint
+        return create_data_array_on_gpu(nb.types.float64,size,size*8)
+
+
+@njit
+def create_data_array_on_gpu(dtype,size,byte_size):
+    if config.gpu_state_storage == "managed":
+        data_tally_ptr = gpu_builder.alloc_managed_bytes(byte_size)
+    else:
+        data_tally_ptr = gpu_builder.alloc_device_bytes(byte_size)
+    data_tally_uint = cast_voidptr_to_uintp(data_tally_ptr)
+    
+    if config.gpu_state_storage == "separate":
+        data_tally = np.zeros( (size,),dtype=dtype)
+    else:
+        data_tally = nb.carray(data_tally_ptr, (size,), dtype)
+    return data_tally, data_tally_uint
 
 
 def create_simulation_container(dtype):
@@ -823,12 +825,16 @@ def create_simulation_container(dtype):
 @njit
 def create_simulation_container_on_gpu(dtype, size):
     if config.gpu_state_storage == "managed":
-        simulation_ptr = gpu_builder.alloc_managed_bytes(size)
+        mcdc_ptr = gpu_builder.alloc_managed_bytes(size)
     else:
-        simulation_ptr = gpu_builder.alloc_device_bytes(size)
-    simulation_uint = voidptr_to_uintp(simulation_ptr)
-    simulation = nb.carray(simulation_ptr, (1,), dtype)
-    return simulation, simulation_uint
+        mcdc_ptr = gpu_builder.alloc_device_bytes(size)
+    mcdc_uint = cast_voidptr_to_uintp(mcdc_ptr)
+
+    if config.gpu_state_storage == "separate":
+        mcdc_container = np.zeros((1,),dtype=dtype)
+    else:
+        mcdc_container = nb.carray(mcdc_ptr, (1,), dtype)
+    return mcdc_container, mcdc_uint
 
 
 # =============================================================================

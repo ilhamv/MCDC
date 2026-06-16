@@ -25,6 +25,8 @@ def source_loop(seed, simulation, data):
 
     full_work_size = simulation["mpi_work_size"]
 
+    print("Gen count before: ",simulation["gen_count"][0])
+    simulation["gen_count"][0] = 0
     if settings["gpu_strategy"] == GPU_STRATEGY_ASYNC:
         phase_size = 1000000000
     else:
@@ -39,6 +41,7 @@ def source_loop(seed, simulation, data):
 
         # Store the global state to the GPU
         if settings["gpu_storage"] == GPU_STORAGE_SEPARATE:
+            print("STORING!")
             harmonize.memcpy_host_to_device(
                 simulation["gpu_meta"]["simulation_pointer"], simulation
             )
@@ -162,6 +165,7 @@ def build_gpu_progs(input_deck, args):
         mcdc["gpu_meta"]["state_pointer"] = adapt.cast_voidptr_to_uintp(alloc_state())
         # src_store_global(mcdc["gpu_meta"]["state_pointer"], mcdc_array[0])
         if config.gpu_state_storage == "separate":
+            print("LOADING!")
             harmonize.memcpy_device_to_host(
                 simulation, simulation["gpu_meta"]["simulation_pointer"]
             )
@@ -176,3 +180,4 @@ def build_gpu_progs(input_deck, args):
     particle_bank_module.set_bank_size(simulation["bank_active"], 0)
 
     source_closeout(simulation, 1, 1, data)
+    print("\nGen count after: ",simulation["gen_count"][0])

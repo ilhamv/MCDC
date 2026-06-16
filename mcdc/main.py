@@ -65,8 +65,10 @@ def run_simulation(simulationPy: Simulation):
     import mcdc.transport.simulation as simulation_module
 
     if settings.neutron_eigenvalue_mode:
+        print("Eigenvalue!!!!")
         simulation_module.eigenvalue_simulation(simulation_container, data)
     else:
+        print("Fixed source!!!!")
         simulation_module.fixed_source_simulation(simulation_container, data)
 
     # TIMER: simulation

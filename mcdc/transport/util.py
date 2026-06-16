@@ -153,8 +153,9 @@ def log_interpolation(x, x1, x2, y1, y2):
 
 @njit
 def atomic_add(array, idx, value):
+    result = array[idx]
     array[idx] += value
-
+    return result
 
 @njit
 def local_array(shape, dtype):

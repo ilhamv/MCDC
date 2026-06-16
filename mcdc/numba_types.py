@@ -22,15 +22,17 @@ particle_data = into_dtype([
     ('w', float64),
     ('particle_type', int64),
     ('rng_seed', uint64),
+    ('step_count', uint64),
 ])
 
 particle = into_dtype([
     ('cell_ID', int64),
     ('material_ID', int64),
     ('surface_ID', int64),
-    ('alive', bool),
-    ('fresh', bool),
+    ('alive', bool_),
+    ('fresh', bool_),
     ('event', int64),
+    ('step_count', uint64),
     ('x', float64),
     ('y', float64),
     ('z', float64),
@@ -384,7 +386,7 @@ nuclide = into_dtype([
     ('atomic_number', int64),
     ('mass_number', int64),
     ('atomic_weight_ratio', float64),
-    ('fissionable', bool),
+    ('fissionable', bool_),
     ('excitation_level', int64),
     ('neutron_xs_energy_grid_offset', int64),
     ('neutron_xs_energy_grid_length', int64),
@@ -518,19 +520,19 @@ settings = into_dtype([
     ('N_active', int64),
     ('N_cycle', int64),
     ('k_init', float64),
-    ('use_gyration_radius', bool),
+    ('use_gyration_radius', bool_),
     ('gyration_radius_type', int64),
-    ('use_source_file', bool),
+    ('use_source_file', bool_),
     ('source_file_name', 'U32'),
     ('time_boundary', float64),
     ('output_name', 'U32'),
-    ('use_progress_bar', bool),
+    ('use_progress_bar', bool_),
     ('N_census', int64),
     ('census_time_offset', int64),
     ('census_time_length', int64),
-    ('use_census_based_tally', bool),
+    ('use_census_based_tally', bool_),
     ('census_tally_frequency', int64),
-    ('save_particle', bool),
+    ('save_particle', bool_),
     ('active_bank_buffer', int64),
     ('census_bank_buffer_ratio', float64),
     ('source_bank_buffer_ratio', float64),
@@ -549,7 +551,7 @@ neutron_multigroup = into_dtype([
 ])
 
 implicit_capture = into_dtype([
-    ('active', bool),
+    ('active', bool_),
 ])
 
 weighted_emission = into_dtype([
@@ -564,7 +566,7 @@ global_weight_roulette = into_dtype([
 ])
 
 weight_windows = into_dtype([
-    ('active', bool),
+    ('active', bool_),
     ('energy_bounds_offset', int64),
     ('energy_bounds_length', int64),
     ('Ne', int64),
@@ -622,7 +624,7 @@ source = into_dtype([
     ('time_range', float64, (2,)),
     ('particle_type', int64),
     ('probability', float64),
-    ('moving', bool),
+    ('moving', bool_),
     ('N_move', int64),
     ('N_move_grid', int64),
     ('move_velocities_offset', int64),
@@ -652,13 +654,13 @@ surface = into_dtype([
     ('J', float64),
     ('R', float64),
     ('r', float64),
-    ('linear', bool),
-    ('quadric', bool),
-    ('quartic', bool),
+    ('linear', bool_),
+    ('quadric', bool_),
+    ('quartic', bool_),
     ('nx', float64),
     ('ny', float64),
     ('nz', float64),
-    ('moving', bool),
+    ('moving', bool_),
     ('N_move', int64),
     ('N_move_grid', int64),
     ('move_velocities_offset', int64),
@@ -852,7 +854,7 @@ def make_simulation_type(N: dict):
         ('cycle_active', bool),
         ('mpi_size', int64),
         ('mpi_rank', int64),
-        ('mpi_master', bool),
+        ('mpi_master', bool_),
         ('mpi_work_start', int64),
         ('mpi_work_size', int64),
         ('mpi_work_size_total', int64),
@@ -863,5 +865,6 @@ def make_simulation_type(N: dict):
         ('runtime_output', float64),
         ('runtime_bank_management', float64),
         ('source_seed', int64),
+        ('gen_count', int64, (1,)),
     ])
 

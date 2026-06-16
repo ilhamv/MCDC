@@ -29,6 +29,7 @@ class ParticleData(MCDCBase):
     w: float = 0.0
     particle_type: int = PARTICLE_NEUTRON
     rng_seed: uint64 = uint64(1)
+    step_count: uint64 = uint64(0)
 
 
 @dataclass
@@ -54,6 +55,7 @@ class Particle(ParticleData):
     alive: bool = False
     fresh: bool = False
     event: int = -1
+    step_count: uint64 = uint64(0)
 
 
 class ParticleBank(MCDCBase):

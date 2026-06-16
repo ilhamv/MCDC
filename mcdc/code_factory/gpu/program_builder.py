@@ -217,8 +217,7 @@ def build_gpu_program(data_size):
         data_ptr = access_data_ptr(program)
         data = harmonize.array_from_ptr(data_ptr, shape, nb.float64)
 
-        util.atomic_add(simulation["mpi_work_iter"], 0, 1)
-        idx_work = simulation["mpi_work_iter"][0]
+        idx_work = util.atomic_add(simulation["mpi_work_iter"], 0, 1)
 
         if idx_work >= simulation["mpi_work_size"]:
             return False
@@ -252,6 +251,11 @@ def build_gpu_program(data_size):
         particle_container = util.local_array(1, type_.particle)
         particle_container[0] = particle_input
         particle = particle_container[0]
+        particle["alive"] = True
+        particle["material_ID"] = -1
+        particle["cell_ID"] = -1
+        particle["surface_ID"] = -1
+        particle["event"] = -1
         particle["fresh"] = False
         step_particle(particle_container, program, data)
         if particle["alive"]:

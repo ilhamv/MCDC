@@ -1,23 +1,21 @@
 from __future__ import annotations
 
 ####
-
 import importlib
+from pathlib import Path
+
 import numba as nb
 import numpy as np
 
 from numba import njit
 from numba.extending import intrinsic
-from pathlib import Path
 
 ####
-
 import mcdc
 import mcdc.code_factory.gpu.program_builder as gpu_builder
 import mcdc.config as config
 import mcdc.object_ as object_module
 import mcdc.object_.base as base
-
 from mcdc.object_.base import (
     MCDCBase,
     MCDCObject,
@@ -50,7 +48,7 @@ size_map = {
     np.bool_: 1,
     np.float64: 8,
     np.int64: 8,
-    np.uint64:8,
+    np.uint64: 8,
     np.str_: 32,
 }
 
@@ -297,11 +295,6 @@ def generate_numba_layers(simulation):
         set_object(object_, annotations, structures, records, data)
     set_object(simulation, annotations, structures, records, data)
 
-    print("\n\n\nA\n\n\n",flush=True)
-    # Allocate the flattened data and re-set the objects
-    data["array"], data["pointer"] = create_data_array(data["size"], type_map[float],size_map[float])
-    print("\n\n\nB\n\n\n",flush=True)
-
     data["size"] = 0
     records = {}
     for mcdc_class in mcdc_classes:
@@ -310,10 +303,6 @@ def generate_numba_layers(simulation):
         else:
             records[mcdc_class.label] = {}
     records["simulation"] = records.pop("simulation")
-
-    for object_ in objects:
-        set_object(object_, annotations, structures, records, data, set_data=True)
-    set_object(simulation, annotations, structures, records, data, set_data=True)
 
     # ==================================================================================
     # Finalize the simulation object structure and set record
@@ -443,7 +432,7 @@ def generate_numba_layers(simulation):
     # Manually set particle bank attributes
     for name in bank_names:
         mcdc_simulation[name]["tag"] = getattr(simulation, name).tag
-    
+
     mcdc_simulation["gpu_meta"]["simulation_pointer"] = mcdc_simulation_pointer
     mcdc_simulation["gpu_meta"]["data_pointer"] = data["pointer"]
 
@@ -796,19 +785,19 @@ def create_data_array(size):
         data = np.zeros(size, dtype=np.float64)
         return data, 0
     else:
-        return create_data_array_on_gpu(nb.types.float64,size,size*8)
+        return create_data_array_on_gpu(nb.types.float64, size, size * 8)
 
 
 @njit
-def create_data_array_on_gpu(dtype,size,byte_size):
+def create_data_array_on_gpu(dtype, size, byte_size):
     if config.gpu_state_storage == "managed":
         data_tally_ptr = gpu_builder.alloc_managed_bytes(byte_size)
     else:
         data_tally_ptr = gpu_builder.alloc_device_bytes(byte_size)
     data_tally_uint = cast_voidptr_to_uintp(data_tally_ptr)
-    
+
     if config.gpu_state_storage == "separate":
-        data_tally = np.zeros( (size,),dtype=dtype)
+        data_tally = np.zeros((size,), dtype=dtype)
     else:
         data_tally = nb.carray(data_tally_ptr, (size,), dtype)
     return data_tally, data_tally_uint
@@ -831,7 +820,7 @@ def create_simulation_container_on_gpu(dtype, size):
     mcdc_uint = cast_voidptr_to_uintp(mcdc_ptr)
 
     if config.gpu_state_storage == "separate":
-        mcdc_container = np.zeros((1,),dtype=dtype)
+        mcdc_container = np.zeros((1,), dtype=dtype)
     else:
         mcdc_container = nb.carray(mcdc_ptr, (1,), dtype)
     return mcdc_container, mcdc_uint
@@ -907,8 +896,10 @@ def align(field_list):
     pad_id = 0
     for field in field_list:
         if len(field) > 3:
-            print_error("Unexpected struct field specification. Specifications \
-                        usually only consist of 3 or fewer members")
+            print_error(
+                "Unexpected struct field specification. Specifications \
+                        usually only consist of 3 or fewer members"
+            )
         multiplier = 1
         if len(field) == 3:
             field = (field[0], field[1], fixup_dims(field[2]))

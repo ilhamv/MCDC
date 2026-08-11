@@ -1,9 +1,8 @@
-from numba import njit, jit, objmode, literal_unroll, types
-from numba.extending import intrinsic
+import cffi
 import numba as nb
 import numpy as np
-
-import cffi
+from numba import jit, literal_unroll, njit, objmode, types
+from numba.extending import intrinsic
 
 ffi = cffi.FFI()
 

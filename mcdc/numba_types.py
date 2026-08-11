@@ -99,9 +99,9 @@ material = into_dtype([
 ])
 
 collision_tally = into_dtype([
-    ('cell_filtered', bool),
+    ('cell_filtered', bool_),
     ('cell_filter_ID', int64),
-    ('mesh_filtered', bool),
+    ('mesh_filtered', bool_),
     ('mesh_filter_type', int64),
     ('mesh_filter_ID', int64),
     ('mesh_stride_z', int64),
@@ -112,9 +112,9 @@ collision_tally = into_dtype([
 ])
 
 tracklength_tally = into_dtype([
-    ('cell_filtered', bool),
+    ('cell_filtered', bool_),
     ('cell_filter_ID', int64),
-    ('mesh_filtered', bool),
+    ('mesh_filtered', bool_),
     ('mesh_filter_type', int64),
     ('mesh_filter_ID', int64),
     ('mesh_stride_z', int64),
@@ -677,9 +677,9 @@ surface = into_dtype([
 ])
 
 surface_crossing_tally = into_dtype([
-    ('surface_filtered', bool),
+    ('surface_filtered', bool_),
     ('surface_filter_ID', int64),
-    ('cell_filtered', bool),
+    ('cell_filtered', bool_),
     ('cell_filter_ID', int64),
     ('ID', int64),
     ('base_ID', int64),

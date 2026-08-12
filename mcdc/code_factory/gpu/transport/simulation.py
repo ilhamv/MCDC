@@ -71,113 +71,19 @@ def source_loop(seed, simulation, data):
         gpu_module.clear_flags(simulation["gpu_meta"]["program_pointer"])
 
         # Recover the original program state
-        src_load_constant(mcdc, mcdc["gpu_state_pointer"])
-        src_load_data(data, mcdc["gpu_state_pointer"])
-        src_clear_flags(mcdc["source_program_pointer"])
-
-    mcdc["mpi_work_size"] = full_work_size
-
-    particle_bank_module.set_bank_size(mcdc["bank_active"], 0)
-
-    # =====================================================================
-    # Closeout (Moved out of the typical particle loop)
-    # =====================================================================
-
-    source_closeout(mcdc, 1, 1, data)
-
-    if mcdc["technique"]["domain_decomposition"]:
-        source_dd_resolution(data, mcdc)
-
-
-def build_gpu_progs(input_deck, args):
-
-    STRAT = args.gpu_strategy
-
-    src_spec = gpu_sources_spec()
-
-    adapt.harm.RuntimeSpec.bind_specs()
-
-    rank = MPI.COMM_WORLD.Get_rank()
-    device_id = rank % args.gpu_share_stride
-
-    if MPI.COMM_WORLD.Get_size() > 1:
-        MPI.COMM_WORLD.Barrier()
-
-    adapt.harm.RuntimeSpec.load_specs()
-
-    if STRAT == "async":
-        args.gpu_arena_size = args.gpu_arena_size // 32
-        src_fns = src_spec.async_functions()
-        pre_fns = pre_spec.async_functions()
-    else:
-        src_fns = src_spec.event_functions()
-        pre_fns = pre_spec.event_functions()
-
-    ARENA_SIZE = args.gpu_arena_size
-    BLOCK_COUNT = args.gpu_block_count
-
-    global alloc_state, free_state
-    alloc_state = src_fns["alloc_state"]
-    free_state = src_fns["free_state"]
-
-    global src_alloc_program, src_free_program
-    global src_load_global, src_store_global, src_load_data, src_store_data, src_store_pointer_data
-    global src_init_program, src_exec_program, src_complete, src_clear_flags
-    src_alloc_program = src_fns["alloc_program"]
-    src_free_program = src_fns["free_program"]
-    src_load_global = src_fns["load_state_device_global"]
-    src_store_global = src_fns["store_state_device_global"]
-    src_store_pointer_global = src_fns["store_pointer_state_device_global"]
-    src_load_data = src_fns["load_state_device_data"]
-    src_store_data = src_fns["store_state_device_data"]
-    src_store_pointer_data = src_fns["store_pointer_state_device_data"]
-    src_init_program = src_fns["init_program"]
-    src_exec_program = src_fns["exec_program"]
-    src_complete = src_fns["complete"]
-    src_clear_flags = src_fns["clear_flags"]
-    src_set_device = src_fns["set_device"]
-
-    global pre_alloc_program, pre_free_program
-    global pre_load_global, pre_store_global, pre_load_data, pre_store_data
-    global pre_init_program, pre_exec_program, pre_complete, pre_clear_flags
-    pre_alloc_state = pre_fns["alloc_state"]
-    pre_free_state = pre_fns["free_state"]
-    pre_alloc_program = pre_fns["alloc_program"]
-    pre_free_program = pre_fns["free_program"]
-    pre_load_global = pre_fns["load_state_device_global"]
-    pre_store_global = pre_fns["store_state_device_global"]
-    pre_load_data = pre_fns["load_state_device_data"]
-    pre_store_data = pre_fns["store_state_device_data"]
-    pre_init_program = pre_fns["init_program"]
-    pre_exec_program = pre_fns["exec_program"]
-    pre_complete = pre_fns["complete"]
-    pre_clear_flags = pre_fns["clear_flags"]
-
-    @njit
-    def real_setup_gpu(mcdc_array, data_tally):
-        mcdc = mcdc_array[0]
-
-        print("STATE POINTER {mcdc['gpu_meta']['state_pointer']}")
-        print("GLOBAL POINTER {mcdc['gpu_meta']['global_pointer']}")
-        print("TALLY POINTER {mcdc['gpu_meta']['tally_pointer']}")
-        src_set_device(device_id)
-        arena_size = ARENA_SIZE
-        mcdc["gpu_meta"]["state_pointer"] = adapt.cast_voidptr_to_uintp(alloc_state())
-        # src_store_global(mcdc["gpu_meta"]["state_pointer"], mcdc_array[0])
-        if config.gpu_state_storage == "separate":
-            print("LOADING!")
-            harmonize.memcpy_device_to_host(
-                simulation, simulation["gpu_meta"]["simulation_pointer"]
-            )
-            harmonize.memcpy_device_to_host(
-                data, simulation["gpu_meta"]["data_pointer"]
-            )
-
-        gpu_module.clear_flags(simulation["gpu_meta"]["program_pointer"])
+        gpu_module.load_state_device_simulation(simulation, simulation["gpu_meta"]["state_pointer"])
+        gpu_module.load_state_device_data(data, simulation["gpu_state_pointer"])
+        gpu_module.clear_flags(simulation["source_program_pointer"])
 
     simulation["mpi_work_size"] = full_work_size
 
     particle_bank_module.set_bank_size(simulation["bank_active"], 0)
 
+    # =====================================================================
+    # Closeout (Moved out of the typical particle loop)
+    # =====================================================================
+
     source_closeout(simulation, 1, 1, data)
-    print("\nGen count after: ",simulation["gen_count"][0])
+
+    #if simulation["technique"]["domain_decomposition"]:
+    #    source_dd_resolution(data, simulation)

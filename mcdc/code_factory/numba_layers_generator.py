@@ -295,7 +295,7 @@ def generate_numba_layers(simulation):
         set_object(object_, annotations, structures, records, data)
     set_object(simulation, annotations, structures, records, data)
 
-    data["size"] = 0
+    # data["size"] = 0
     records = {}
     for mcdc_class in mcdc_classes:
         if issubclass(mcdc_class, ObjectNonSingleton):
@@ -378,6 +378,7 @@ def generate_numba_layers(simulation):
     # Allocate the flattened data and re-set the objects
     # ==================================================================================
 
+    print("\n\nDATA SIZE SHOULD BE: ", data["size"])
     data["array"], data["pointer"] = create_data_array(data["size"])
 
     data["size"] = 0
@@ -394,7 +395,7 @@ def generate_numba_layers(simulation):
         simulation_dtype
     )
     mcdc_simulation = mcdc_simulation_container[0]
-    mcdc_simulation["gpu_meta"]["global_pointer"] = mcdc_simulation_pointer
+    mcdc_simulation["gpu_meta"]["simulation_pointer"] = mcdc_simulation_pointer
     mcdc_simulation["gpu_meta"]["data_pointer"] = data["pointer"]
 
     record = records["simulation"]
@@ -701,6 +702,13 @@ def set_object(
             record[f"{attribute_name}_offset"] = data["size"]
             record[f"{attribute_name}_length"] = len(attribute_flatten)
             if set_data:
+                print(
+                    "\n\n\nSHAPE IS : ",
+                    f"(size: {data['size']} : {data['size']} + {len(attribute_flatten)} -- {len(data['array'])} )",
+                    data["array"][
+                        data["size"] : data["size"] + len(attribute_flatten)
+                    ].shape,
+                )
                 data["array"][data["size"] : data["size"] + len(attribute_flatten)] = (
                     attribute_flatten[:]
                 )
@@ -790,6 +798,7 @@ def create_data_array(size):
 
 @njit
 def create_data_array_on_gpu(dtype, size, byte_size):
+    print(f"STORAGE TYPE IS {config.gpu_state_storage}")
     if config.gpu_state_storage == "managed":
         data_tally_ptr = gpu_builder.alloc_managed_bytes(byte_size)
     else:
@@ -1287,10 +1296,11 @@ def _accessor_2d_element(
 
 
 def _accessor_2d_vector(object_name, attribute_name, stride, setter=False):
-    text = f"@njit\n"
     if setter:
+        text = f"@njit\n"
         text += f"def {attribute_name}_vector(index_1, {object_name}, data, value):\n"
     else:
+        text = f"@array_return(nb.types.float64,1)\n"
         text += f"def {attribute_name}_vector(index_1, {object_name}, data):\n"
     text += f'    offset = {object_name}["{attribute_name}_offset"]\n'
     text += accessor_dimension("stride", stride, object_name)
@@ -1299,7 +1309,7 @@ def _accessor_2d_vector(object_name, attribute_name, stride, setter=False):
     if setter:
         text += f"    data[start:end] = value\n\n\n"
     else:
-        text += f"    return data[start:end]\n\n\n"
+        text += f"    return array_result(data[start:end])\n\n\n"
     return text
 
 

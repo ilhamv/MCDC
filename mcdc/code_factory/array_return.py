@@ -132,7 +132,7 @@ def array_result_overload(array):
         )
 
     def impl(array):
-        return (into_voidptr(array), len(array))
+        return (into_voidptr(array), array.shape)
 
     return impl
 
@@ -148,16 +148,16 @@ def context_guard(context):
         raise nb.core.errors.UnsupportedError(f"Unsupported target context {context}.")
 
 
-def array_return_typing(fn, elem_type):
+def array_return_typing(fn, elem_type, ndim):
 
     from inspect import signature
 
     arg_list = ",".join([param for param in signature(fn).parameters])
-    template = "def typer({arg_list}):\n    return nb.types.Array(dtype=elem_type,ndim=1,layout='C')({arg_list})"
+    template = "def typer({arg_list}):\n    return nb.types.Array(dtype=elem_type,ndim={ndim},layout='C')({arg_list})"
 
     gns = globals() | {"elem_type": elem_type}
     lns = {}
-    exec(template.format(arg_list=arg_list), gns, lns)
+    exec(template.format(arg_list=arg_list, ndim=ndim), gns, lns)
     typer = lns["typer"]
 
     def typer_factory(context):
@@ -170,20 +170,22 @@ def array_return_typing(fn, elem_type):
     nb.extending.type_callable(fn)(typer_factory)
 
 
-def array_return_lowering(fn, elem_type):
+def array_return_lowering(fn, elem_type, ndim):
 
     from inspect import signature
 
     param_count = len(signature(fn).parameters)
-    retty = nb.types.Array(dtype=elem_type, ndim=1, layout="C")
+    retty = nb.types.Array(dtype=elem_type, ndim=ndim, layout="C")
     sig = retty(*([nb.types.Any] * param_count))
 
     jit_fn = nb.njit(fn)
 
     def builtin(context, builder, sig, args):
 
-        thing, data = args
-        thing_type, data_type = sig.args
+        # print(f"\n\n\nARGS ARE: {args}\n\n\n", flush=True)
+        # print(f"\n\n\nARG TYPES ARE: {sig.args}\n\n\n", flush=True)
+        # thing, data = args
+        # thing_type, data_type = sig.args
 
         import llvmlite.binding as ll
         from llvmlite import ir
@@ -206,14 +208,16 @@ def array_return_lowering(fn, elem_type):
             CUDA_AVAILABLE = False
 
         lmod = builder.module
-        retty = nb.types.Tuple([nb.types.voidptr, nb.types.uintp])
+        retty = nb.types.Tuple(
+            [nb.types.voidptr, nb.types.Tuple([nb.types.uintp] * ndim)]
+        )
         ptr_sig = retty(*sig.args)
 
         res = context.compile_internal(builder, jit_fn.py_func, ptr_sig, args)
         ptr_res = builder.extract_value(res, 0)
         size_res = builder.extract_value(res, 1)
-        shape = [size_res]
-        dtype = data_type.dtype
+        shape = size_res
+        dtype = elem_type
 
         if ROCM_AVAILABLE and isinstance(context, nb.hip.target.HIPTargetContext):
             targetdata = ll.create_target_data(nb.hip.amdgcn.DATA_LAYOUT)
@@ -233,14 +237,14 @@ def array_return_lowering(fn, elem_type):
 
         kstrides = [context.get_constant(types.intp, itemsize)]
 
-        aryty = types.Array(dtype=elem_type, ndim=1, layout="C")
+        aryty = types.Array(dtype=elem_type, ndim=ndim, layout="C")
         ary = context.make_array(aryty)(context, builder)
 
         dataptr = builder.addrspacecast(
             ptr_res, ir.PointerType(ir.IntType(8)), "generic"
         )
 
-        kshape = [size_res]
+        kshape = size_res
         context.populate_array(
             ary,
             data=builder.bitcast(dataptr, ary.data.type),
@@ -254,10 +258,10 @@ def array_return_lowering(fn, elem_type):
     nb.extending.lower_builtin(fn, *sig.args)(builtin)
 
 
-def array_return(sig):
+def array_return(sig, ndim=1):
     def array_return_true_decorator(fn):
-        array_return_typing(fn, sig)
-        array_return_lowering(fn, sig)
+        array_return_typing(fn, sig, ndim)
+        array_return_lowering(fn, sig, ndim)
         return fn
 
     return array_return_true_decorator

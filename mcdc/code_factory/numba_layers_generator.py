@@ -295,14 +295,14 @@ def generate_numba_layers(simulation):
         set_object(object_, annotations, structures, records, data)
     set_object(simulation, annotations, structures, records, data)
 
-    # data["size"] = 0
-    records = {}
-    for mcdc_class in mcdc_classes:
-        if issubclass(mcdc_class, ObjectNonSingleton):
-            records[mcdc_class.label] = []
-        else:
-            records[mcdc_class.label] = {}
-    records["simulation"] = records.pop("simulation")
+    ## data["size"] = 0
+    #records = {}
+    #for mcdc_class in mcdc_classes:
+    #    if issubclass(mcdc_class, ObjectNonSingleton):
+    #        records[mcdc_class.label] = []
+    #    else:
+    #        records[mcdc_class.label] = {}
+    #records["simulation"] = records.pop("simulation")
 
     # ==================================================================================
     # Finalize the simulation object structure and set record
@@ -386,6 +386,7 @@ def generate_numba_layers(simulation):
         set_object(object_, annotations, structures, records, data, set_data=True)
     set_object(simulation, annotations, structures, records, data, set_data=True)
 
+
     # ==================================================================================
     # Set with records
     # ==================================================================================
@@ -436,6 +437,8 @@ def generate_numba_layers(simulation):
 
     mcdc_simulation["gpu_meta"]["simulation_pointer"] = mcdc_simulation_pointer
     mcdc_simulation["gpu_meta"]["data_pointer"] = data["pointer"]
+    
+    print(f"\n\n{mcdc_simulation}\n\n")
 
     # GPU program setup
     if config.target == "gpu":
@@ -702,13 +705,13 @@ def set_object(
             record[f"{attribute_name}_offset"] = data["size"]
             record[f"{attribute_name}_length"] = len(attribute_flatten)
             if set_data:
-                print(
-                    "\n\n\nSHAPE IS : ",
-                    f"(size: {data['size']} : {data['size']} + {len(attribute_flatten)} -- {len(data['array'])} )",
-                    data["array"][
-                        data["size"] : data["size"] + len(attribute_flatten)
-                    ].shape,
-                )
+                #print(
+                #    "\n\n\nSHAPE IS : ",
+                #    f"(size: {data['size']} : {data['size']} + {len(attribute_flatten)} -- {len(data['array'])} )",
+                #    data["array"][
+                #        data["size"] : data["size"] + len(attribute_flatten)
+                #    ].shape,
+                #)
                 data["array"][data["size"] : data["size"] + len(attribute_flatten)] = (
                     attribute_flatten[:]
                 )
@@ -793,7 +796,7 @@ def create_data_array(size):
         data = np.zeros(size, dtype=np.float64)
         return data, 0
     else:
-        return create_data_array_on_gpu(nb.types.float64, size, size * 8)
+        return create_data_array_on_gpu(nb.types.float64, size, size * 16)
 
 
 @njit
@@ -823,9 +826,9 @@ def create_simulation_container(dtype):
 @njit
 def create_simulation_container_on_gpu(dtype, size):
     if config.gpu_state_storage == "managed":
-        mcdc_ptr = gpu_builder.alloc_managed_bytes(size)
+        mcdc_ptr = gpu_builder.alloc_managed_bytes(size*8)
     else:
-        mcdc_ptr = gpu_builder.alloc_device_bytes(size)
+        mcdc_ptr = gpu_builder.alloc_device_bytes(size*8)
     mcdc_uint = cast_voidptr_to_uintp(mcdc_ptr)
 
     if config.gpu_state_storage == "separate":
@@ -1300,7 +1303,7 @@ def _accessor_2d_vector(object_name, attribute_name, stride, setter=False):
         text = f"@njit\n"
         text += f"def {attribute_name}_vector(index_1, {object_name}, data, value):\n"
     else:
-        text = f"@array_return(nb.types.float64,1)\n"
+        text = f"@array_return(nb.types.float64)\n"
         text += f"def {attribute_name}_vector(index_1, {object_name}, data):\n"
     text += f'    offset = {object_name}["{attribute_name}_offset"]\n'
     text += accessor_dimension("stride", stride, object_name)

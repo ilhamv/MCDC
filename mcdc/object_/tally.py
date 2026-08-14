@@ -372,6 +372,8 @@ class Tally(MCDCPolymorphic):
         # Set bins
         self.bin_shape = list(shape)
 
+        print("SHAPE IS: ",shape)
+
         # Set strides
         self.stride_time = reduce(operator.mul, shape[4:])
         self.stride_energy = reduce(operator.mul, shape[3:])

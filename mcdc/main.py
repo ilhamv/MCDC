@@ -64,6 +64,8 @@ def run_simulation(simulationPy: Simulation):
     # Run simulation
     import mcdc.transport.simulation as simulation_module
 
+    
+    print(f"\n\n{simulation_container}\n\n")
     if settings.neutron_eigenvalue_mode:
         print("Eigenvalue!!!!")
         simulation_module.eigenvalue_simulation(simulation_container, data)

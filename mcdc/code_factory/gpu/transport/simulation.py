@@ -42,16 +42,19 @@ def source_loop(seed, simulation, data):
         # Store the global state to the GPU
         if settings["gpu_storage"] == GPU_STORAGE_SEPARATE:
             print("STORING!")
-            harmonize.memcpy_host_to_device(
-                simulation["gpu_meta"]["simulation_pointer"], simulation
-            )
-            harmonize.memcpy_host_to_device(
-                simulation["gpu_meta"]["data_pointer"], data
-            )
+            gpu_module.store_state_device_simulation(simulation["gpu_meta"]["state_pointer"],simulation)
+            gpu_module.store_state_device_data(simulation["gpu_meta"]["state_pointer"],data)
+            #harmonize.memcpy_host_to_device(
+            #    simulation["gpu_meta"]["simulation_pointer"], simulation
+            #)
+            #harmonize.memcpy_host_to_device(
+            #    simulation["gpu_meta"]["data_pointer"], data
+            #)
 
         # Execute the program, and continue to do so until it is done
         block_count = gpu_module.BLOCK_COUNT
 
+        print("Beginning loop!")
         if settings["gpu_strategy"] == GPU_STRATEGY_ASYNC:
             gpu_module.exec_program(
                 simulation["gpu_meta"]["program_pointer"], block_count, iter_count
@@ -68,12 +71,22 @@ def source_loop(seed, simulation, data):
                 gpu_module.exec_program(
                     simulation["gpu_meta"]["program_pointer"], block_count, batch_size
                 )
+        print("Loop done!")
         gpu_module.clear_flags(simulation["gpu_meta"]["program_pointer"])
+        print("Cleared flags!")
 
         # Recover the original program state
-        gpu_module.load_state_device_simulation(simulation, simulation["gpu_meta"]["state_pointer"])
-        gpu_module.load_state_device_data(data, simulation["gpu_state_pointer"])
-        gpu_module.clear_flags(simulation["source_program_pointer"])
+        if settings["gpu_storage"] == GPU_STORAGE_SEPARATE:
+            print("STORING!")
+            gpu_module.load_state_device_simulation(simulation, simulation["gpu_meta"]["state_pointer"])
+            gpu_module.load_state_device_data(data, simulation["gpu_meta"]["state_pointer"])
+            #harmonize.memcpy_device_to_host(
+            #    simulation,simulation["gpu_meta"]["simulation_pointer"]
+            #)
+            #harmonize.memcpy_device_to_host(
+            #    data,simulation["gpu_meta"]["data_pointer"]
+            #)
+        gpu_module.clear_flags(simulation["gpu_meta"]["program_pointer"])
 
     simulation["mpi_work_size"] = full_work_size
 

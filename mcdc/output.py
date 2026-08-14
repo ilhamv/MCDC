@@ -202,6 +202,12 @@ def create_tally_dataset(file, mcdc, data):
         start_sdev = tally["bin_sum_square_offset"]
         mean = data[start_mean : start_mean + N_bin]
         sdev = data[start_sdev : start_sdev + N_bin]
+        print("TALLY  : ",tally)
+        print("BIN SHAPE OFFSET : ",tally["bin_shape_offset"])
+        print("BIN_SHAPE_LENGTH : ",tally["bin_shape_length"])
+        print("DATA_SHAPE : ",data.shape)
+        print("DATA   : ",data)
+        print("RESULT : ",mcdc_get.tally.bin_shape_all(tally, data))
         shape = tuple([int(x) for x in mcdc_get.tally.bin_shape_all(tally, data)])
         mean = mean.reshape(shape)
         sdev = sdev.reshape(shape)

@@ -130,5 +130,5 @@ Return to Development
 
 #. Merge ``upstream/main`` back into ``upstream/dev`` after the release is published and verified.
 #. For a patch release, confirm that the back-merge retains the patch while preserving the unreleased feature work already on ``upstream/dev``.
-#. Prepare ``upstream/dev`` for the next development cycle and confirm its required checks pass.
+#. Prepare ``upstream/dev`` for the next development cycle by restoring the ``Unreleased`` section with ``Added``, ``Changed``, ``Deprecated``, ``Removed``, ``Fixed``, and ``Security`` headings at the top of ``CHANGELOG.md``, preserving any post-release entries already on ``upstream/dev``.
 #. Remove the merged ``release_branch`` when it is no longer needed.

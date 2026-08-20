@@ -261,6 +261,9 @@ def source_closeout(simulation, idx_work, N_prog, data):
             tally_module.closeout.accumulate(simulation, data)
 
     # Progress printout
+    if simulation["mpi_work_size"] == 0:
+        return
+
     percent = (idx_work + 1.0) / simulation["mpi_work_size"]
     if simulation["settings"]["use_progress_bar"] and int(percent * 100.0) > N_prog:
         N_prog += 1

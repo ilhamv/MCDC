@@ -1,6 +1,7 @@
 import math
 import numpy as np
 
+import numba as nb
 from numba import njit
 from typing import Sequence
 
@@ -162,6 +163,12 @@ def local_array(shape, dtype):
     return np.zeros(shape, dtype=dtype)
 
 
-@njit
 def access_simulation(program):
     return program
+
+@nb.extending.overload(access_simulation,target="cpu")
+def access_simulation_cpu_overload(program):
+    def impl(program):
+        return program
+    return impl
+

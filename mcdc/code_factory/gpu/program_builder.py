@@ -12,12 +12,9 @@ import mcdc.config as config
 
 
 def adapt_transport_functions():
-    global access_simulation
 
     import mcdc.code_factory.gpu.transport as gpu_transport
     import mcdc.transport as transport
-
-    transport.util.access_simulation = access_simulation
 
     # TODO: Make the following automatic
     transport.geometry.interface.report_lost_particle = (
@@ -165,6 +162,12 @@ def forward_declare_gpu_program(simulation_dtype):
     alloc_managed_bytes = harmonize.alloc_managed_bytes
     alloc_device_bytes = harmonize.alloc_device_bytes
 
+    from mcdc.transport import util
+    @nb.extending.overload(util.access_simulation,target="hip")
+    def access_simulation_gpu_overload(program):
+        def impl(program):
+            return access_simulation(program)
+        return impl
 
 # ======================================================================================
 # Program builder
@@ -305,7 +308,9 @@ def build_gpu_program(data_size):
     import mcdc.transport.util as util
     from mcdc.transport.simulation import generate_source_particle, step_particle
 
-    global alloc_state, free_state
+    global access_simulation, alloc_state, free_state
+
+    print(f"Access simulation is {access_simulation}")
 
     global alloc_program, free_program
 
@@ -381,6 +386,7 @@ def build_gpu_program(data_size):
     base_fns = (initialize, finalize, make_work)
     async_fns = [step]
     src_spec = harmonize.RuntimeSpec("mcdc_source", state_spec, base_fns, async_fns)
+    print(f"ACCESS SIMULATION IS NOW SET TO {access_simulation}")
     harmonize.RuntimeSpec.bind_specs()
 
     # Load the specs

@@ -86,7 +86,6 @@ def source_loop(seed, simulation, data):
             #harmonize.memcpy_device_to_host(
             #    data,simulation["gpu_meta"]["data_pointer"]
             #)
-        gpu_module.clear_flags(simulation["gpu_meta"]["program_pointer"])
 
     simulation["mpi_work_size"] = full_work_size
 

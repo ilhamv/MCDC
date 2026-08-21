@@ -168,11 +168,11 @@ def get_distance(particle_container, surface):
 
     # TODO: May replace with a fully numba-native quartic solver if torus performance becomes important;
     coefficients = util.local_array(5, np.complex128)
-    coefficients[0] = a4 + 0.0j
-    coefficients[1] = a3 + 0.0j
+    coefficients[0] = a0 + 0.0j
+    coefficients[1] = a1 + 0.0j
     coefficients[2] = a2 + 0.0j
-    coefficients[3] = a1 + 0.0j
-    coefficients[4] = a0 + 0.0j
+    coefficients[3] = a3 + 0.0j
+    coefficients[4] = a4 + 0.0j
     roots = util.local_array(4, np.complex128)
     root_solve.solve_quartic(coefficients, roots)
 

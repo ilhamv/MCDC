@@ -1,4 +1,5 @@
 import math
+import cmath
 import numpy as np
 import numba as nb
 
@@ -14,8 +15,14 @@ def modulus(x):
 
 @njit()
 def sqrt(x):
-    return math.sqrt(x.real) * (x + x.real) / modulus(x + x.real)
-
+    r = modulus(x)
+    real_part = math.sqrt((r + x.real) / 2.0)
+    if x.imag < 0:
+        imag_part = -math.sqrt((r - x.real) / 2.0)
+    else:
+        imag_part = math.sqrt((r - x.real) / 2.0)
+        
+    return complex(real_part, imag_part)
 
 @njit()
 def power(x, n):
@@ -43,7 +50,9 @@ def nth_root(x, n, index):
 
 @njit()
 def principal_nth_root(x, n):
-    return nth_root(x, n, 0)
+    result = nth_root(x, n, 0)
+    return result
+
 
 
 @njit()
@@ -70,10 +79,10 @@ def solve_biquadratic(coeff, roots):
 
     # Yield roots for x by taking square roots of the x^2
     # solution.
-    roots[4] = sqrt(roots[1])
-    roots[3] = -roots[2]
-    roots[0] = sqrt(roots[0])
-    roots[1] = -roots[0]
+    roots[3] = sqrt(roots[1])
+    roots[2] = -roots[3]
+    roots[1] = sqrt(roots[0])
+    roots[0] = -roots[1]
 
     # Restore the original positions of the coefficients
     coeff[4] = coeff[2]
@@ -97,11 +106,11 @@ def solve_depressed_quartic(coeff, roots):
     # To solve the depressed quartic, one must first find one
     # root of a cubic polynomial.
 
-    p = (-power(a, 2) / 12) - c
-    q = (-power(a, 3) / 108) + (a * c / 3) - (power(b, 2) / 8)
+    p = (-power(a, 2) / 12.0) - c
+    q = (-power(a, 3) / 108.0) + (a * c / 3.0) - (power(b, 2) / 8.0)
 
-    cube_const = -q / 2
-    sqrt_body = (power(q, 2) / 4) + (power(p, 3) / 27)
+    cube_const = -q / 2.0
+    sqrt_body = (power(q, 2) / 4.0) + (power(p, 3) / 27.0)
     w_pos = principal_nth_root(cube_const + sqrt(sqrt_body), 3)
     w_neg = principal_nth_root(cube_const - sqrt(sqrt_body), 3)
 
@@ -113,21 +122,21 @@ def solve_depressed_quartic(coeff, roots):
         w = w_neg
 
     # A root of the cubic
-    y = (a / 6) + w - (p / (3 * w))
+    y = (a / 6.0) + w - (p / (3.0 * w))
 
     # The different roots are found by flipping the signs
     # of some terms in a formula. There are three sections
     # unaffected by these flips, represented below by
     # alpha, beta, and gamma
 
-    alpha = sqrt(2 * y - a)
-    beta = -2 * y - a
-    gamma = (2 * b) / sqrt(2 * y - a)
+    alpha = sqrt(2.0 * y - a)
+    beta = -2.0 * y - a
+    gamma = (2.0 * b) / sqrt(2.0 * y - a)
 
-    roots[0] = (-alpha) + sqrt(beta + gamma)  # - + +
-    roots[1] = (-alpha) - sqrt(beta + gamma)  # - - +
-    roots[2] = (alpha) + sqrt(beta - gamma)  # + + -
-    roots[3] = (alpha) - sqrt(beta - gamma)  # + - -
+    roots[0] = ((-alpha) + sqrt(beta + gamma)) / 2.0 # - + +
+    roots[1] = ((-alpha) - sqrt(beta + gamma)) / 2.0 # - - +
+    roots[2] = ((alpha) + sqrt(beta - gamma)) / 2.0 # + + -
+    roots[3] = ((alpha) - sqrt(beta - gamma)) / 2.0 # + - -
 
 
 @njit()
@@ -152,15 +161,15 @@ def solve_quartic(coeff, roots):
     # they can be plugged into this equation to yeild the
     # roots for x.
 
-    sub_coeff = util.local_array(4, np.complex128)
+    sub_coeff = util.local_array(5, np.complex128)
     sub_coeff[4] = 1.0 + 0.0j
     sub_coeff[3] = 0.0j
-    sub_coeff[2] = (-3 * power(b, 2)) / (8 * power(a, 2)) + c / a
-    sub_coeff[1] = power(b, 3) / (8 * power(a, 3)) - (b * c) / (2 * power(a, 2)) + d / a
+    sub_coeff[2] = (-3.0 * power(b, 2)) / (8.0 * power(a, 2)) + c / a
+    sub_coeff[1] = power(b, 3) / (8.0 * power(a, 3)) - (b * c) / (2.0 * power(a, 2)) + d / a
     sub_coeff[0] = (
-        (-3 * power(b, 4)) / (256 * power(a, 4))
-        + (c * power(b, 2)) / (16 * power(a, 3))
-        - (b * d) / (4 * power(a, 2))
+        (-3.0 * power(b, 4)) / (256.0 * power(a, 4))
+        + (c * power(b, 2)) / (16.0 * power(a, 3))
+        - (b * d) / (4.0 * power(a, 2))
         + e / a
     )
 
@@ -177,4 +186,15 @@ def solve_quartic(coeff, roots):
         solve_depressed_quartic(sub_coeff, sub_roots)
 
     for idx in range(4):
-        roots[idx] = sub_roots[idx] - b / (4 * a)
+        roots[idx] = sub_roots[idx] - b / (4.0 * a)
+    
+    ans_roots = np.roots(np.flip(coeff))
+
+
+    for idx in range(4):
+        y = 0
+        ans_y = 0
+        for i in range(5):
+            y += (roots[idx]**i) * coeff[i]
+            ans_y += (ans_roots[idx]**i) * coeff[i]
+

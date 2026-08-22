@@ -1,4 +1,5 @@
 from mcdc.object_.simulation import Simulation
+import mcdc.config as config
 
 # ======================================================================================
 # Run Simulation

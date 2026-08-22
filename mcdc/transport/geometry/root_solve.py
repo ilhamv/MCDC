@@ -187,14 +187,4 @@ def solve_quartic(coeff, roots):
 
     for idx in range(4):
         roots[idx] = sub_roots[idx] - b / (4.0 * a)
-    
-    ans_roots = np.roots(np.flip(coeff))
-
-
-    for idx in range(4):
-        y = 0
-        ans_y = 0
-        for i in range(5):
-            y += (roots[idx]**i) * coeff[i]
-            ans_y += (ans_roots[idx]**i) * coeff[i]
 

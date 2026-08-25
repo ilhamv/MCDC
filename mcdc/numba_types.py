@@ -54,8 +54,8 @@ cell = into_dtype([
     ('surface_IDs_offset', int64),
     ('fill_type', int64),
     ('fill_ID', int64),
-    ('fill_translated', bool),
-    ('fill_rotated', bool),
+    ('fill_translated', bool_),
+    ('fill_rotated', bool_),
     ('translation', float64, (3,)),
     ('rotation', float64, (3,)),
     ('N_collision_tally', int64),
@@ -84,8 +84,8 @@ lattice = into_dtype([
 material = into_dtype([
     ('name', 'U32'),
     ('temperature', float64),
-    ('fissionable', bool),
-    ('has_neutron_multigroup', bool),
+    ('fissionable', bool_),
+    ('has_neutron_multigroup', bool_),
     ('neutron_multigroup_ID', int64),
     ('N_nuclide', int64),
     ('nuclide_IDs_offset', int64),
@@ -376,7 +376,7 @@ neutron_multigroup_data = into_dtype([
     ('chi_p_length', int64),
     ('chi_d_offset', int64),
     ('chi_d_length', int64),
-    ('fissionable', bool),
+    ('fissionable', bool_),
     ('ID', int64),
 ])
 
@@ -537,17 +537,17 @@ settings = into_dtype([
     ('census_bank_buffer_ratio', float64),
     ('source_bank_buffer_ratio', float64),
     ('future_bank_buffer_ratio', float64),
-    ('neutron_transport', bool),
-    ('electron_transport', bool),
-    ('proton_transport', bool),
-    ('neutron_eigenvalue_mode', bool),
+    ('neutron_transport', bool_),
+    ('electron_transport', bool_),
+    ('proton_transport', bool_),
+    ('neutron_eigenvalue_mode', bool_),
     ('gpu_strategy', int64),
     ('gpu_async_type', int64),
     ('gpu_storage', int64),
 ])
 
 neutron_multigroup = into_dtype([
-    ('hybrid', bool),
+    ('hybrid', bool_),
 ])
 
 implicit_capture = into_dtype([
@@ -555,12 +555,12 @@ implicit_capture = into_dtype([
 ])
 
 weighted_emission = into_dtype([
-    ('active', bool),
+    ('active', bool_),
     ('weight_target', float64),
 ])
 
 global_weight_roulette = into_dtype([
-    ('active', bool),
+    ('active', bool_),
     ('weight_threshold', float64),
     ('weight_target', float64),
 ])
@@ -583,7 +583,7 @@ weight_windows = into_dtype([
 ])
 
 population_control = into_dtype([
-    ('active', bool),
+    ('active', bool_),
 ])
 
 technique = into_dtype([
@@ -597,10 +597,10 @@ technique = into_dtype([
 
 source = into_dtype([
     ('name', 'U32'),
-    ('point_source', bool),
-    ('uniform_x', bool),
-    ('uniform_y', bool),
-    ('uniform_z', bool),
+    ('point_source', bool_),
+    ('uniform_x', bool_),
+    ('uniform_y', bool_),
+    ('uniform_z', bool_),
     ('point', float64, (3,)),
     ('x', float64, (2,)),
     ('y', float64, (2,)),
@@ -608,18 +608,18 @@ source = into_dtype([
     ('x_pdf_ID', int64),
     ('y_pdf_ID', int64),
     ('z_pdf_ID', int64),
-    ('isotropic_direction', bool),
-    ('mono_direction', bool),
-    ('white_direction', bool),
+    ('isotropic_direction', bool_),
+    ('mono_direction', bool_),
+    ('white_direction', bool_),
     ('direction', float64, (3,)),
     ('polar_cosine', float64, (2,)),
     ('azimuthal', float64, (2,)),
-    ('mono_energetic', bool),
-    ('discrete_energy', bool),
+    ('mono_energetic', bool_),
+    ('discrete_energy', bool_),
     ('energy', float64),
     ('energy_pdf_ID', int64),
     ('energy_pmf_ID', int64),
-    ('discrete_time', bool),
+    ('discrete_time', bool_),
     ('time', float64),
     ('time_range', float64, (2,)),
     ('particle_type', int64),
@@ -690,9 +690,9 @@ tally = into_dtype([
     ('scores_offset', int64),
     ('scores_length', int64),
     ('particle_type', int64),
-    ('filter_direction', bool),
-    ('filter_energy', bool),
-    ('filter_time', bool),
+    ('filter_direction', bool_),
+    ('filter_energy', bool_),
+    ('filter_time', bool_),
     ('mu_offset', int64),
     ('mu_length', int64),
     ('azi_offset', int64),
@@ -851,7 +851,7 @@ def make_simulation_type(N: dict):
         ('eigenvalue_tally_C', float64, (1,)),
         ('gyration_radius_offset', int64),
         ('gyration_radius_length', int64),
-        ('cycle_active', bool),
+        ('cycle_active', bool_),
         ('mpi_size', int64),
         ('mpi_rank', int64),
         ('mpi_master', bool_),

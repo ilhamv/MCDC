@@ -25,7 +25,6 @@ def source_loop(seed, simulation, data):
 
     full_work_size = simulation["mpi_work_size"]
 
-    print("Gen count before: ",simulation["gen_count"][0])
     simulation["gen_count"][0] = 0
     if settings["gpu_strategy"] == GPU_STRATEGY_ASYNC:
         phase_size = 1000000000
@@ -41,20 +40,12 @@ def source_loop(seed, simulation, data):
 
         # Store the global state to the GPU
         if settings["gpu_storage"] == GPU_STORAGE_SEPARATE:
-            print("STORING!")
             gpu_module.store_state_device_simulation(simulation["gpu_meta"]["state_pointer"],simulation)
             gpu_module.store_state_device_data(simulation["gpu_meta"]["state_pointer"],data)
-            #harmonize.memcpy_host_to_device(
-            #    simulation["gpu_meta"]["simulation_pointer"], simulation
-            #)
-            #harmonize.memcpy_host_to_device(
-            #    simulation["gpu_meta"]["data_pointer"], data
-            #)
 
         # Execute the program, and continue to do so until it is done
         block_count = gpu_module.BLOCK_COUNT
 
-        print("Beginning loop!")
         if settings["gpu_strategy"] == GPU_STRATEGY_ASYNC:
             gpu_module.exec_program(
                 simulation["gpu_meta"]["program_pointer"], block_count, iter_count
@@ -71,21 +62,12 @@ def source_loop(seed, simulation, data):
                 gpu_module.exec_program(
                     simulation["gpu_meta"]["program_pointer"], block_count, batch_size
                 )
-        print("Loop done!")
         gpu_module.clear_flags(simulation["gpu_meta"]["program_pointer"])
-        print("Cleared flags!")
 
         # Recover the original program state
         if settings["gpu_storage"] == GPU_STORAGE_SEPARATE:
-            print("STORING!")
             gpu_module.load_state_device_simulation(simulation, simulation["gpu_meta"]["state_pointer"])
             gpu_module.load_state_device_data(data, simulation["gpu_meta"]["state_pointer"])
-            #harmonize.memcpy_device_to_host(
-            #    simulation,simulation["gpu_meta"]["simulation_pointer"]
-            #)
-            #harmonize.memcpy_device_to_host(
-            #    data,simulation["gpu_meta"]["data_pointer"]
-            #)
 
     simulation["mpi_work_size"] = full_work_size
 
@@ -96,6 +78,3 @@ def source_loop(seed, simulation, data):
     # =====================================================================
 
     source_closeout(simulation, 1, 1, data)
-
-    #if simulation["technique"]["domain_decomposition"]:
-    #    source_dd_resolution(data, simulation)

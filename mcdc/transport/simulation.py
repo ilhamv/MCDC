@@ -170,8 +170,6 @@ def source_loop(seed, simulation, data):
     work_start = simulation["mpi_work_start"]
     work_size = simulation["mpi_work_size"]
 
-    print("Gen count before: ",simulation["gen_count"][0])
-    simulation["gen_count"][0] = 0
     for idx_work in range(work_size):
         simulation["idx_work"] = work_start + idx_work
         generate_source_particle(work_start, idx_work, seed, simulation, data)
@@ -180,7 +178,6 @@ def source_loop(seed, simulation, data):
         exhaust_active_bank(simulation, data)
 
         source_closeout(simulation, idx_work, N_prog, data)
-    print("\nGen count after: ",simulation["gen_count"][0])
 
 
 @njit
@@ -204,8 +201,6 @@ def generate_source_particle(work_start, idx_work, seed, program, data):
             idx_work : (idx_work + 1)
         ]
         particle = particle_container[0]
-
-    particle["step_count"] = 0
 
     # Skip if beyond time boundary
     if particle["t"] > settings["time_boundary"]:
@@ -289,27 +284,16 @@ def step_particle(particle_container, program, data):
     simulation = util.access_simulation(program)
     particle = particle_container[0]
 
-    particle["step_count"] += 1
-
     # Determine and move to event
     move_to_event(particle_container, simulation, data)
-
 
     # Execute events
     if particle["event"] == EVENT_LOST:
         return
-        
-    # In first step of first phase: 10 CPU alive, 0 GPU alive 
-    if (particle["alive"]) and (particle["step_count"] <= 1) :
-        util.atomic_add(simulation["gen_count"],0,1)
 
     # Collision
     if particle["event"] & EVENT_COLLISION:
         collision_data_container = util.local_array(1, type_.collision_data)
-
-        # In first step of first phase: 3 CPU alive, 0 GPU alive 
-        #if (particle["alive"]) and (particle["step_count"] <= 1) :
-        #    util.atomic_add(simulation["gen_count"],0,1)
 
         # Execute the physics
         physics.collision(particle_container, collision_data_container, program, data)

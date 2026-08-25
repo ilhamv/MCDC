@@ -295,15 +295,6 @@ def generate_numba_layers(simulation):
         set_object(object_, annotations, structures, records, data)
     set_object(simulation, annotations, structures, records, data)
 
-    ## data["size"] = 0
-    #records = {}
-    #for mcdc_class in mcdc_classes:
-    #    if issubclass(mcdc_class, ObjectNonSingleton):
-    #        records[mcdc_class.label] = []
-    #    else:
-    #        records[mcdc_class.label] = {}
-    #records["simulation"] = records.pop("simulation")
-
     # ==================================================================================
     # Finalize the simulation object structure and set record
     # ==================================================================================
@@ -378,7 +369,6 @@ def generate_numba_layers(simulation):
     # Allocate the flattened data and re-set the objects
     # ==================================================================================
 
-    print("\n\nDATA SIZE SHOULD BE: ", data["size"])
     data["array"], data["pointer"] = create_data_array(data["size"])
 
     data["size"] = 0
@@ -438,7 +428,6 @@ def generate_numba_layers(simulation):
     mcdc_simulation["gpu_meta"]["simulation_pointer"] = mcdc_simulation_pointer
     mcdc_simulation["gpu_meta"]["data_pointer"] = data["pointer"]
     
-    print(f"\n\n{mcdc_simulation}\n\n")
 
     # GPU program setup
     if config.target == "gpu":
@@ -705,13 +694,6 @@ def set_object(
             record[f"{attribute_name}_offset"] = data["size"]
             record[f"{attribute_name}_length"] = len(attribute_flatten)
             if set_data:
-                #print(
-                #    "\n\n\nSHAPE IS : ",
-                #    f"(size: {data['size']} : {data['size']} + {len(attribute_flatten)} -- {len(data['array'])} )",
-                #    data["array"][
-                #        data["size"] : data["size"] + len(attribute_flatten)
-                #    ].shape,
-                #)
                 data["array"][data["size"] : data["size"] + len(attribute_flatten)] = (
                     attribute_flatten[:]
                 )
@@ -801,7 +783,6 @@ def create_data_array(size):
 
 @njit
 def create_data_array_on_gpu(dtype, size, byte_size):
-    print(f"STORAGE TYPE IS {config.gpu_state_storage}")
     if config.gpu_state_storage == "managed":
         data_tally_ptr = gpu_builder.alloc_managed_bytes(byte_size)
     else:

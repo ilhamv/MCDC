@@ -192,7 +192,6 @@ class Simulation(MCDCBase):
     # GPU metadata
     gpu_meta: GPUMeta
     source_seed: int
-    gen_count: Annotated[NDArray[int64], (1,)]
 
 
     def __init__(self, name: str = "") -> None:
@@ -278,7 +277,6 @@ class Simulation(MCDCBase):
         # GPU metadata
         self.gpu_meta = GPUMeta()
         self.source_seed = 0
-        self.gen_count = np.zeros(1, dtype=int64)
 
     def _reset_model(self) -> None:
         # Physics

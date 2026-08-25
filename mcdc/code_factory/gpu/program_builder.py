@@ -10,7 +10,7 @@ import mcdc.config as config
 # Transport function adapter
 # ======================================================================================
 
-
+# Overwrites global symbols in other modules with gpu-compatible counterparts
 def adapt_transport_functions():
 
     import mcdc.code_factory.gpu.transport as gpu_transport
@@ -187,13 +187,6 @@ load_state_device_data = None
 store_state_device_data = None
 store_pointer_state_device_data = None
 
-load_global = None
-store_global = None
-store_pointer_global = None
-load_data = None
-store_data = None
-store_pointer_data = None
-
 init_program = None
 exec_program = None
 complete = None
@@ -205,7 +198,7 @@ BLOCK_COUNT = 0
 
 
 
-
+# Compiles gpu kernels and loads in the functions that call into said kernels
 def build_gpu_progs(input_deck):
 
     STRAT = config.args.gpu_strategy
@@ -274,15 +267,11 @@ def build_gpu_progs(input_deck):
     def real_setup_gpu(mcdc_array, data_tally):
         mcdc = mcdc_array[0]
 
-        print("STATE POINTER {mcdc['gpu_meta']['state_pointer']}")
-        print("GLOBAL POINTER {mcdc['gpu_meta']['global_pointer']}")
-        print("TALLY POINTER {mcdc['gpu_meta']['tally_pointer']}")
         src_set_device(device_id)
         arena_size = ARENA_SIZE
         mcdc["gpu_meta"]["state_pointer"] = adapt.cast_voidptr_to_uintp(alloc_state())
         # src_store_global(mcdc["gpu_meta"]["state_pointer"], mcdc_array[0])
         if config.gpu_state_storage == "separate":
-            print("LOADING!")
             harmonize.memcpy_device_to_host(
                 simulation, simulation["gpu_meta"]["simulation_pointer"]
             )
@@ -297,7 +286,6 @@ def build_gpu_progs(input_deck):
     particle_bank_module.set_bank_size(simulation["bank_active"], 0)
 
     source_closeout(simulation, 1, 1, data)
-    print("\nGen count after: ",simulation["gen_count"][0])
 
 
 
@@ -309,8 +297,6 @@ def build_gpu_program(data_size):
     from mcdc.transport.simulation import generate_source_particle, step_particle
 
     global access_simulation, alloc_state, free_state
-
-    print(f"Access simulation is {access_simulation}")
 
     global alloc_program, free_program
 
@@ -386,7 +372,6 @@ def build_gpu_program(data_size):
     base_fns = (initialize, finalize, make_work)
     async_fns = [step]
     src_spec = harmonize.RuntimeSpec("mcdc_source", state_spec, base_fns, async_fns)
-    print(f"ACCESS SIMULATION IS NOW SET TO {access_simulation}")
     harmonize.RuntimeSpec.bind_specs()
 
     # Load the specs
@@ -490,39 +475,6 @@ def teardown_gpu_program(simulation):
     free_program(cast_uintp_to_voidptr(simulation["gpu_meta"]["program_pointer"]))
     free_state(cast_uintp_to_voidptr(simulation["gpu_meta"]["state_pointer"]))
 
-
-# ======================================================================================
-# Simulation structure and data creators
-# ======================================================================================
-
-
-# def create_data_array(size, dtype):
-#    if config.gpu_state_storage == "managed":
-#        data_tally_ptr = harmonize.alloc_managed_bytes(size)
-#    else:
-#        data_tally_ptr = harmonize.alloc_device_bytes(size)
-#    data_tally_uint = cast_voidptr_to_uintp(data_tally_ptr)
-#
-#    if config.gpu_state_storage == "separate":
-#        data_tally = nb.zeros( (size,),dtype=dtype)
-#    else:
-#        data_tally = nb.carray(data_tally_ptr, (size,), dtype)
-#    return data_tally, data_tally_uint
-
-
-# def create_mcdc_container(dtype):
-#    if config.gpu_state_storage == "managed":
-#        mcdc_ptr = harmonize.alloc_managed_bytes(dtype.itemsize)
-#    else:
-#        mcdc_ptr = harmonize.alloc_device_bytes(dtype.itemsize)
-#
-#    mcdc_uint = cast_voidptr_to_uintp(mcdc_ptr)
-#    if config.gpu_state_storage == "separate":
-#        mcdc_tally = nb.zeros((size,),dtype=dtype)
-#    else:
-#        mcdc_tally = nb.carray(mcdc_ptr, (size,), dtype)
-#    mcdc_container = nb.carray(mcdc_ptr, (1,), dtype)
-#    return mcdc_container, mcdc_uint
 
 
 # ======================================================================================

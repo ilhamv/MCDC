@@ -115,6 +115,27 @@ clear_cache = args.clear_cache
 
 
 # ======================================================================================
+# Flags for GPU platform availability
+# ======================================================================================
+
+try:
+    import numba.hip as hip
+    ROCM_AVAILABLE = True
+except:
+    ROCM_AVAILABLE = False
+
+if not ROCM_AVAILABLE:
+    try:
+        import numba.cuda as cuda
+        CUDA_AVAILABLE = True
+    except:
+        CUDA_AVAILABLE = False
+else:
+    CUDA_AVAILABLE = False
+
+
+
+# ======================================================================================
 # Simulation-setting overrides
 # ======================================================================================
 

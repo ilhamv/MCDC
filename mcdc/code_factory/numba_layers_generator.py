@@ -376,7 +376,6 @@ def generate_numba_layers(simulation):
         set_object(object_, annotations, structures, records, data, set_data=True)
     set_object(simulation, annotations, structures, records, data, set_data=True)
 
-
     # ==================================================================================
     # Set with records
     # ==================================================================================
@@ -427,7 +426,6 @@ def generate_numba_layers(simulation):
 
     mcdc_simulation["gpu_meta"]["simulation_pointer"] = mcdc_simulation_pointer
     mcdc_simulation["gpu_meta"]["data_pointer"] = data["pointer"]
-    
 
     # GPU program setup
     if config.target == "gpu":
@@ -807,9 +805,9 @@ def create_simulation_container(dtype):
 @njit
 def create_simulation_container_on_gpu(dtype, size):
     if config.gpu_state_storage == "managed":
-        mcdc_ptr = gpu_builder.alloc_managed_bytes(size*8)
+        mcdc_ptr = gpu_builder.alloc_managed_bytes(size * 8)
     else:
-        mcdc_ptr = gpu_builder.alloc_device_bytes(size*8)
+        mcdc_ptr = gpu_builder.alloc_device_bytes(size * 8)
     mcdc_uint = cast_voidptr_to_uintp(mcdc_ptr)
 
     if config.gpu_state_storage == "separate":
@@ -889,10 +887,8 @@ def align(field_list):
     pad_id = 0
     for field in field_list:
         if len(field) > 3:
-            print_error(
-                "Unexpected struct field specification. Specifications \
-                        usually only consist of 3 or fewer members"
-            )
+            print_error("Unexpected struct field specification. Specifications \
+                        usually only consist of 3 or fewer members")
         multiplier = 1
         if len(field) == 3:
             field = (field[0], field[1], fixup_dims(field[2]))

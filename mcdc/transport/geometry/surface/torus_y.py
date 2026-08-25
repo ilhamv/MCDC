@@ -199,7 +199,7 @@ def get_distance(particle_container, surface):
     coefficients[3] = a3 + 0.0j
     coefficients[4] = a4 + 0.0j
     roots = util.local_array(4, np.complex128)
-    root_solve.solve_quartic(coefficients,roots)
+    root_solve.solve_quartic(coefficients, roots)
 
     min_t = INF
 

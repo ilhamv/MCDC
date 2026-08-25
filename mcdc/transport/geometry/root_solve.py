@@ -21,8 +21,9 @@ def sqrt(x):
         imag_part = -math.sqrt((r - x.real) / 2.0)
     else:
         imag_part = math.sqrt((r - x.real) / 2.0)
-        
+
     return complex(real_part, imag_part)
+
 
 @njit()
 def power(x, n):
@@ -52,7 +53,6 @@ def nth_root(x, n, index):
 def principal_nth_root(x, n):
     result = nth_root(x, n, 0)
     return result
-
 
 
 @njit()
@@ -133,10 +133,10 @@ def solve_depressed_quartic(coeff, roots):
     beta = -2.0 * y - a
     gamma = (2.0 * b) / sqrt(2.0 * y - a)
 
-    roots[0] = ((-alpha) + sqrt(beta + gamma)) / 2.0 # - + +
-    roots[1] = ((-alpha) - sqrt(beta + gamma)) / 2.0 # - - +
-    roots[2] = ((alpha) + sqrt(beta - gamma)) / 2.0 # + + -
-    roots[3] = ((alpha) - sqrt(beta - gamma)) / 2.0 # + - -
+    roots[0] = ((-alpha) + sqrt(beta + gamma)) / 2.0  # - + +
+    roots[1] = ((-alpha) - sqrt(beta + gamma)) / 2.0  # - - +
+    roots[2] = ((alpha) + sqrt(beta - gamma)) / 2.0  # + + -
+    roots[3] = ((alpha) - sqrt(beta - gamma)) / 2.0  # + - -
 
 
 @njit()
@@ -165,7 +165,9 @@ def solve_quartic(coeff, roots):
     sub_coeff[4] = 1.0 + 0.0j
     sub_coeff[3] = 0.0j
     sub_coeff[2] = (-3.0 * power(b, 2)) / (8.0 * power(a, 2)) + c / a
-    sub_coeff[1] = power(b, 3) / (8.0 * power(a, 3)) - (b * c) / (2.0 * power(a, 2)) + d / a
+    sub_coeff[1] = (
+        power(b, 3) / (8.0 * power(a, 3)) - (b * c) / (2.0 * power(a, 2)) + d / a
+    )
     sub_coeff[0] = (
         (-3.0 * power(b, 4)) / (256.0 * power(a, 4))
         + (c * power(b, 2)) / (16.0 * power(a, 3))
@@ -187,4 +189,3 @@ def solve_quartic(coeff, roots):
 
     for idx in range(4):
         roots[idx] = sub_roots[idx] - b / (4.0 * a)
-

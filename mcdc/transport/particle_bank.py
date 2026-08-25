@@ -50,7 +50,7 @@ def _bank_particle(particle_container, bank):
         report_full_bank(bank)
 
     # Set particle data
-    idx = add_bank_size(bank,1)
+    idx = add_bank_size(bank, 1)
 
     particle_module.copy(bank["particle_data"][idx : idx + 1], particle_container)
 
@@ -91,7 +91,6 @@ def pop_particle(particle_container, bank):
     # Decrement bank size
     idx = add_bank_size(bank, -1) - 1
     particle_module.copy(particle_container, bank["particle_data"][idx : idx + 1])
-
 
     # Set default IDs and event for the live particle
     particle = particle_container[0]
@@ -148,7 +147,7 @@ def promote_future_particles(program, data):
         if particle["t"] < next_census_time:
 
             bank_census_particle(particle_container, program)
-            j = add_bank_size(future_bank,-1)
+            j = add_bank_size(future_bank, -1)
 
             # Consolidate the emptied space in the future bank
             particle_module.copy(
@@ -168,9 +167,21 @@ def manage_particle_banks(simulation):
     serial = simulation["mpi_size"] == 1
 
     with objmode():
-        print("Bank census has size: ",get_bank_size(simulation["bank_census"]),flush=True)
-        print("Bank source has size: ",get_bank_size(simulation["bank_source"]),flush=True)
-        print("Bank future has size: ",get_bank_size(simulation["bank_future"]),flush=True)
+        print(
+            "Bank census has size: ",
+            get_bank_size(simulation["bank_census"]),
+            flush=True,
+        )
+        print(
+            "Bank source has size: ",
+            get_bank_size(simulation["bank_source"]),
+            flush=True,
+        )
+        print(
+            "Bank future has size: ",
+            get_bank_size(simulation["bank_future"]),
+            flush=True,
+        )
 
     # TIMER: bank management
     time_start = 0.0

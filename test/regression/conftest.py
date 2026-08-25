@@ -183,7 +183,7 @@ def compare_outputs(output_path, answer_path, target):
 
 
 def compare_tallies(output, answer, target, errors):
-    gpu_pass_list = ["uq_var","sdev"]
+    gpu_pass_list = ["uq_var", "sdev"]
     name_root = "tallies"
     for tally in answer[name_root].keys():
         name_tally = f"{name_root}/{tally}"

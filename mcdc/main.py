@@ -65,7 +65,6 @@ def run_simulation(simulationPy: Simulation):
     # Run simulation
     import mcdc.transport.simulation as simulation_module
 
-    
     if settings.neutron_eigenvalue_mode:
         simulation_module.eigenvalue_simulation(simulation_container, data)
     else:
@@ -179,7 +178,6 @@ def prepare(simulationPy: Simulation):
         from mcdc.code_factory.gpu.program_builder import setup_gpu_program
 
         setup_gpu_program(simulation_container, data)
-    
 
     # ==================================================================================
     # Finalize

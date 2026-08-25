@@ -10,6 +10,7 @@ import mcdc.config as config
 # Transport function adapter
 # ======================================================================================
 
+
 # Overwrites global symbols in other modules with gpu-compatible counterparts
 def adapt_transport_functions():
 
@@ -98,14 +99,7 @@ def forward_declare_gpu_program(simulation_dtype):
 
     # Get to set the globals
     global none_type, simulation_type, data_type
-    global \
-        state_spec, \
-        access_simulation, \
-        access_data_ptr, \
-        access_group, \
-        access_thread, \
-        particle_gpu, \
-        particle_record_gpu
+    global state_spec, access_simulation, access_data_ptr, access_group, access_thread, particle_gpu, particle_record_gpu
     global step_async, find_cell_async
     global alloc_managed_bytes, alloc_device_bytes
 
@@ -163,11 +157,14 @@ def forward_declare_gpu_program(simulation_dtype):
     alloc_device_bytes = harmonize.alloc_device_bytes
 
     from mcdc.transport import util
-    @nb.extending.overload(util.access_simulation,target="hip")
+
+    @nb.extending.overload(util.access_simulation, target="hip")
     def access_simulation_gpu_overload(program):
         def impl(program):
             return access_simulation(program)
+
         return impl
+
 
 # ======================================================================================
 # Program builder
@@ -195,7 +192,6 @@ set_device = None
 
 ARENA_SIZE = 0
 BLOCK_COUNT = 0
-
 
 
 # Compiles gpu kernels and loads in the functions that call into said kernels
@@ -288,7 +284,6 @@ def build_gpu_progs(input_deck):
     source_closeout(simulation, 1, 1, data)
 
 
-
 def build_gpu_program(data_size):
     import harmonize
 
@@ -300,15 +295,9 @@ def build_gpu_program(data_size):
 
     global alloc_program, free_program
 
-    global \
-        load_state_device_simulation, \
-        store_state_device_simulation, \
-        store_pointer_state_device_simulation
+    global load_state_device_simulation, store_state_device_simulation, store_pointer_state_device_simulation
 
-    global \
-        load_state_device_data, \
-        store_state_device_data, \
-        store_pointer_state_device_data
+    global load_state_device_data, store_state_device_data, store_pointer_state_device_data
 
     global init_program, exec_program, complete, clear_flags, set_device
     global ARENA_SIZE, BLOCK_COUNT
@@ -474,7 +463,6 @@ def setup_gpu_program(simulation_container, data):
 def teardown_gpu_program(simulation):
     free_program(cast_uintp_to_voidptr(simulation["gpu_meta"]["program_pointer"]))
     free_state(cast_uintp_to_voidptr(simulation["gpu_meta"]["state_pointer"]))
-
 
 
 # ======================================================================================

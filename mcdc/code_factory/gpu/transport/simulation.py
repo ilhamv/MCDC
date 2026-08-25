@@ -40,8 +40,12 @@ def source_loop(seed, simulation, data):
 
         # Store the global state to the GPU
         if settings["gpu_storage"] == GPU_STORAGE_SEPARATE:
-            gpu_module.store_state_device_simulation(simulation["gpu_meta"]["state_pointer"],simulation)
-            gpu_module.store_state_device_data(simulation["gpu_meta"]["state_pointer"],data)
+            gpu_module.store_state_device_simulation(
+                simulation["gpu_meta"]["state_pointer"], simulation
+            )
+            gpu_module.store_state_device_data(
+                simulation["gpu_meta"]["state_pointer"], data
+            )
 
         # Execute the program, and continue to do so until it is done
         block_count = gpu_module.BLOCK_COUNT
@@ -66,8 +70,12 @@ def source_loop(seed, simulation, data):
 
         # Recover the original program state
         if settings["gpu_storage"] == GPU_STORAGE_SEPARATE:
-            gpu_module.load_state_device_simulation(simulation, simulation["gpu_meta"]["state_pointer"])
-            gpu_module.load_state_device_data(data, simulation["gpu_meta"]["state_pointer"])
+            gpu_module.load_state_device_simulation(
+                simulation, simulation["gpu_meta"]["state_pointer"]
+            )
+            gpu_module.load_state_device_data(
+                data, simulation["gpu_meta"]["state_pointer"]
+            )
 
     simulation["mpi_work_size"] = full_work_size
 

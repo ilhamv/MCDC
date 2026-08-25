@@ -158,6 +158,7 @@ def atomic_add(array, idx, value):
     array[idx] += value
     return result
 
+
 @njit
 def local_array(shape, dtype):
     return np.zeros(shape, dtype=dtype)
@@ -166,9 +167,10 @@ def local_array(shape, dtype):
 def access_simulation(program):
     return program
 
-@nb.extending.overload(access_simulation,target="cpu")
+
+@nb.extending.overload(access_simulation, target="cpu")
 def access_simulation_cpu_overload(program):
     def impl(program):
         return program
-    return impl
 
+    return impl

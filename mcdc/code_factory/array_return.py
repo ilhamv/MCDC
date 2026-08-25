@@ -78,7 +78,6 @@ def into_voidptr(value):
     return into_voidptr_python(value)
 
 
-
 # =============================================================================
 # uintp/voidptr casting utility functions
 # =============================================================================
@@ -95,7 +94,6 @@ def uintp_to_voidptr(value):
 # for void* values in python mode for mcdc.
 def into_voidptr_python(value):
     raise RuntimeError("`into_voidptr` is only supported in nopython mode.")
-
 
 
 @nb.extending.overload(into_voidptr_python)
@@ -129,6 +127,7 @@ def into_voidptr_overload(value):
 # Helper decorators, functions, and builtins for returning arrays
 ###############################################################################
 
+
 # Overload target
 def array_result(array):
     return array
@@ -147,6 +146,7 @@ def array_result_overload(array):
 
     return impl
 
+
 # Raises an error if the context is not recognized
 def context_guard(context):
     if isinstance(context, nb.core.typing.context.Context):
@@ -157,6 +157,7 @@ def context_guard(context):
         pass
     else:
         raise nb.core.errors.UnsupportedError(f"Unsupported target context {context}.")
+
 
 # Typing for the `array_return` builtin.
 def array_return_typing(fn, elem_type, ndim):
@@ -203,7 +204,6 @@ def array_return_lowering(fn, elem_type, ndim):
         import llvmlite.binding as ll
         from llvmlite import ir
 
-
         lmod = builder.module
         retty = nb.types.Tuple(
             [nb.types.voidptr, nb.types.Tuple([nb.types.uintp] * ndim)]
@@ -218,9 +218,13 @@ def array_return_lowering(fn, elem_type, ndim):
 
         # GPU platforms require a `targetdata` for array construction, which is created
         # slightly differently depending upon the platform.
-        if config.ROCM_AVAILABLE and isinstance(context, nb.hip.target.HIPTargetContext):
+        if config.ROCM_AVAILABLE and isinstance(
+            context, nb.hip.target.HIPTargetContext
+        ):
             targetdata = ll.create_target_data(nb.hip.amdgcn.DATA_LAYOUT)
-        elif config.CUDA_AVAILABLE and isinstance(context, nb.cuda.target.CUDATargetContext):
+        elif config.CUDA_AVAILABLE and isinstance(
+            context, nb.cuda.target.CUDATargetContext
+        ):
             targetdata = ll.create_target_data(nb.cuda.cudadrv.nvvm.NVVM().data_layout)
         lldtype = context.get_data_type(dtype)
 
@@ -228,9 +232,13 @@ def array_return_lowering(fn, elem_type, ndim):
         # upon platform
         if isinstance(context, nb.core.cpu.CPUContext):
             itemsize = context.get_abi_sizeof(lldtype)
-        elif config.ROCM_AVAILABLE and isinstance(context, nb.hip.target.HIPTargetContext):
+        elif config.ROCM_AVAILABLE and isinstance(
+            context, nb.hip.target.HIPTargetContext
+        ):
             itemsize = lldtype.get_abi_size(targetdata)
-        elif config.CUDA_AVAILABLE and isinstance(context, nb.cuda.target.CUDATargetContext):
+        elif config.CUDA_AVAILABLE and isinstance(
+            context, nb.cuda.target.CUDATargetContext
+        ):
             itemsize = lldtype.get_abi_size(targetdata)
         else:
             raise nb.core.errors.UnsupportedError(
@@ -268,6 +276,7 @@ def array_return_lowering(fn, elem_type, ndim):
     # was defined above.
     nb.extending.lower_builtin(fn, *sig.args)(builtin)
 
+
 # A function decorated with `array_return` may return an array by passing
 # it through the `array_result` function and returning the output
 def array_return(sig, ndim=1):
@@ -277,4 +286,3 @@ def array_return(sig, ndim=1):
         return fn
 
     return array_return_true_decorator
-

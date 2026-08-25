@@ -22,7 +22,6 @@ particle_data = into_dtype([
     ('w', float64),
     ('particle_type', int64),
     ('rng_seed', uint64),
-    ('step_count', uint64),
 ])
 
 particle = into_dtype([
@@ -32,7 +31,6 @@ particle = into_dtype([
     ('alive', bool_),
     ('fresh', bool_),
     ('event', int64),
-    ('step_count', uint64),
     ('x', float64),
     ('y', float64),
     ('z', float64),
@@ -865,6 +863,5 @@ def make_simulation_type(N: dict):
         ('runtime_output', float64),
         ('runtime_bank_management', float64),
         ('source_seed', int64),
-        ('gen_count', int64, (1,)),
     ])
 

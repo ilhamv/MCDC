@@ -166,23 +166,6 @@ def manage_particle_banks(simulation):
     master = simulation["mpi_master"]
     serial = simulation["mpi_size"] == 1
 
-    with objmode():
-        print(
-            "Bank census has size: ",
-            get_bank_size(simulation["bank_census"]),
-            flush=True,
-        )
-        print(
-            "Bank source has size: ",
-            get_bank_size(simulation["bank_source"]),
-            flush=True,
-        )
-        print(
-            "Bank future has size: ",
-            get_bank_size(simulation["bank_future"]),
-            flush=True,
-        )
-
     # TIMER: bank management
     time_start = 0.0
     if master:

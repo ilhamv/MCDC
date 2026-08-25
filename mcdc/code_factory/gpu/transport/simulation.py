@@ -25,7 +25,6 @@ def source_loop(seed, simulation, data):
 
     full_work_size = simulation["mpi_work_size"]
 
-    simulation["gen_count"][0] = 0
     if settings["gpu_strategy"] == GPU_STRATEGY_ASYNC:
         phase_size = 1000000000
     else:

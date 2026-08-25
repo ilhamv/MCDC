@@ -1,3 +1,17 @@
+"""Generate MC/DC continuous-energy neutron libraries from ACE tables.
+
+The script reads every selected ACE continuous-energy table through ACEtk and
+writes one HDF5 file per nuclide and temperature.  The HDF5 schema is consumed
+by ``mcdc.object_.nuclide`` and ``mcdc.object_.neutron_reaction``.
+
+Required environment variables
+------------------------------
+``MCDC_ACELIB``
+    Directory containing input ACE tables.
+``MCDC_LIB``
+    Directory receiving generated MC/DC HDF5 files.
+"""
+
 import ACEtk
 import argparse
 import h5py
@@ -6,15 +20,17 @@ import os
 
 from tqdm import tqdm
 
-####
-
 import util
-from util import print_error, print_note
+from util import DataLibraryGenerationError
 
 parser = argparse.ArgumentParser(description="MC/DC data generator")
+# TODO: Move argument parsing and the conversion loop into callable functions,
+# then add fixture-based ACE-to-HDF5 tests for every supported distribution law.
 parser.add_argument("--rewrite", dest="rewrite", action="store_true", default=False)
 parser.add_argument("--verbose", dest="verbose", action="store_true", default=False)
 args, unargs = parser.parse_known_args()
+# TODO: Reject or report unknown arguments.  Silently accepting misspelled
+# options can make a library-generation run differ from the user's intent.
 rewrite = args.rewrite
 verbose = args.verbose
 
@@ -23,16 +39,21 @@ output_dir = os.getenv("MCDC_LIB")
 ace_dir = os.getenv("MCDC_ACELIB")
 
 if output_dir is None:
-    print_error("Environment variable $MCDC_LIB is not set")
+    raise DataLibraryGenerationError("Environment variable $MCDC_LIB is not set")
 if ace_dir is None:
-    print_error("Environment variable $MCDC_ACELIB is not set")
+    raise DataLibraryGenerationError("Environment variable $MCDC_ACELIB is not set")
 
 # Create output directory if needed
 os.makedirs(output_dir, exist_ok=True)
 print(f"\nACE directory: {ace_dir}")
 print(f"Output directory: {output_dir}\n")
 
-# Get the files
+# Select input tables.  In normal mode, an existing output filename is treated
+# as a completed conversion and skipped.
+#
+# TODO: Filter directory entries to valid ACE tables before parsing their first
+# line; an xsdir file, README, subdirectory, or unrelated file currently aborts
+# the entire run.
 if rewrite:
     # Get them all
     target_files = os.listdir(ace_dir)
@@ -68,7 +89,11 @@ for ace_name in pbar:
     if not rewrite and os.path.exists(f"{output_dir}/{mcdc_name}"):
         continue
 
-    # Create MC/DC file
+    # Create MC/DC file.
+    #
+    # FIXME: Write to a temporary path and atomically rename it only after the
+    # conversion succeeds.  Any later conversion exception currently leaves a
+    # partial final file that a subsequent non-rewrite run will incorrectly skip.
     if verbose:
         print("\n" + "=" * 80 + "\n")
         print(f"Create {mcdc_name} from {ace_name}\n")
@@ -78,14 +103,8 @@ for ace_name in pbar:
     # ==================================================================================
     # Basic properties
     # ==================================================================================
-    """
-    The basic properties are
-        - File ACE source info: title, version, date, comments
-        - Nuclide name and excitation level
-        - Temperature
-        - Atomic number (Z) and weight ratio (A)
-        - Fissionable flag
-    """
+    # Store ACE provenance, nuclide identity, temperature, atomic properties,
+    # and whether a fission multiplicity block is present.
 
     # Load ACE tables
     ace_table = ACEtk.ContinuousEnergyTable.from_file(f"{ace_dir}/{ace_name}")
@@ -102,7 +121,8 @@ for ace_name in pbar:
     file.create_dataset("nuclide_name", data=nuclide_name)
     file.create_dataset("excitation_level", data=S)
 
-    # Temperature
+    # Temperature decoded from the LANL table suffix by util.decode_name().
+    # TODO: Cross-check this against the temperature recorded in the ACE header.
     temperature = file.create_dataset("temperature", data=T)
     temperature.attrs["unit"] = "K"
 
@@ -121,14 +141,17 @@ for ace_name in pbar:
     # ==================================================================================
     # Reaction groups
     # ==================================================================================
-    """
-    The reaction groups are
-        - Elastic scat.  : MT=2
-        - Capture        : Reactions with zero multiplicity
-        - Fission        : MT=18 or MT=(19, 20, 21, and 38)
-        - Inelastic scat.: Non-fission reactions with non-zero multiplicity
-        - Ignored        : MT=(1, 3, 4, 10) and MT>117
-    """
+    # Reactions are grouped according to the runtime collision interface:
+    #   elastic:   MT=2
+    #   capture:   non-redundant reactions with zero neutron multiplicity
+    #   fission:   MT=18, or partial chances MT=19, 20, 21, and 38
+    #   inelastic: non-fission reactions with positive neutron multiplicity
+    # Aggregate MT=1, 3, 4, and 10 records and MT>117 production summaries are
+    # not represented as independently sampled reactions.
+    #
+    # TODO: Document and test this classification against every reaction in the
+    # supported LANL library.  Energy-dependent multiplicities are rejected
+    # below and require an explicit runtime representation.
 
     reactions = file.create_group("neutron_reactions")
 
@@ -138,7 +161,9 @@ for ace_name in pbar:
     N_reaction = nu_block.number_reactions
 
     if nu_block.number_reactions != rx_block.number_reactions:
-        print_error("Non-equal reaction number in reaction and multiplicity blocks")
+        raise DataLibraryGenerationError(
+            "Non-equal reaction number in reaction and multiplicity blocks"
+        )
 
     # The groups
     elastic_group = reactions.create_group("elastic_scattering")
@@ -163,7 +188,9 @@ for ace_name in pbar:
         # The component should not be given
         for MT in fission_chance_MTs:
             if rx_block.has_MT(MT):
-                print_error("Both total fission and its components are given")
+                raise DataLibraryGenerationError(
+                    "Both total fission and its components are given"
+                )
     else:
         for MT in fission_chance_MTs:
             if rx_block.has_MT(MT):
@@ -180,14 +207,16 @@ for ace_name in pbar:
         nu = nu_block.multiplicity(idx)
 
         if type(nu) != int:
-            print_error(f"Non-integer multiplicity for inelastic scattering")
+            raise DataLibraryGenerationError(
+                "Non-integer multiplicity for inelastic scattering"
+            )
 
         if nu == 0:
             capture_MTs.append(MT)
         elif nu > 0:
             inelastic_MTs.append(MT)
         else:
-            print_error(f"Negative multiplicity for MT-{MT:03}")
+            raise DataLibraryGenerationError(f"Negative multiplicity for MT-{MT:03}")
 
     # Create MTs
     for rx_group, rx_MTs in [
@@ -216,14 +245,14 @@ for ace_name in pbar:
         del file["neutron_reactions/inelastic_scattering"]
 
     # ==================================================================================
-    # Cross-sections
+    # Cross sections
     # ==================================================================================
-    """
-    xs_energy_grid: universal XS energy grid (MeV) used for all MTs
-    MT/xs         : XS for the MT (barns)
-    offset        : for reactions with energy threshold, so that we don't need to store 
-                    the zeros
-    """
+    # ``xs_energy_grid`` is the ACE union grid in MeV.  Every reaction stores
+    # only its nonzero tail in barns and an offset into that union grid.
+    #
+    # TODO: Preserve unresolved-resonance probability tables when MC/DC gains a
+    # probability-table collision treatment.  The current library contains
+    # only the smooth pointwise cross sections from the ACE ESZ/SIG blocks.
 
     xs0_block = ace_table.principal_cross_section_block
     xs_block = ace_table.cross_section_block
@@ -256,11 +285,10 @@ for ace_name in pbar:
             xs.attrs["unit"] = "barns"
 
     # ==================================================================================
-    # Q-value
+    # Q values
     # ==================================================================================
-    """
-    MT/Q-value: the Q-value (MeV)
-    """
+    # Store each reaction Q value in MeV.  Elastic scattering has Q=0 by
+    # definition in the MC/DC schema.
 
     q_value_block = ace_table.reaction_qvalue_block
 
@@ -282,16 +310,11 @@ for ace_name in pbar:
             dataset.attrs["unit"] = "MeV"
 
     # ==================================================================================
-    # Reference frames and inelastic scattering multiplicities
+    # Reference frames and inelastic-scattering multiplicities
     # ==================================================================================
-    """
-    Reference frame
-        MT/reference_frame: either COM or LAB
-        Elastic is always in COM frame (per ACE standard).
-
-    Inelastic scattering multiplicities
-        MT/multiplicity
-    """
+    # ``reference_frame`` is encoded as ``COM`` or ``LAB``.  Elastic ACE data
+    # are sampled in the center-of-mass frame.  Inelastic reactions additionally
+    # store their fixed neutron multiplicity.
 
     # Elastic scattering reference frame
     for MT in elastic_MTs:
@@ -311,7 +334,9 @@ for ace_name in pbar:
             elif reference_frame == ACEtk.ReferenceFrame.CentreOfMass:
                 reference_frame = "COM"
             else:
-                print_error(f"Unknown reaction reference frame type for MT-{MT:03}")
+                raise DataLibraryGenerationError(
+                    f"Unknown reaction reference frame type for MT-{MT:03}"
+                )
             group.create_dataset(f"MT-{MT:03}/reference_frame", data=reference_frame)
 
     # Inelastic multiplicity
@@ -323,9 +348,13 @@ for ace_name in pbar:
     # ==================================================================================
     # Angular distributions
     # ==================================================================================
-    """
-    TODO
-    """
+    # Angular data are stored separately unless ACE marks the angle as correlated
+    # with the outgoing-energy law.  util.load_cosine_distribution() flattens
+    # incident-energy-dependent angular tables for the runtime sampler.
+    #
+    # TODO: Support fully isotropic elastic blocks and ACE equiprobable angular
+    # bins.  The pre-check below assumes elastic data expose ``distributions``
+    # and currently requires every entry to be explicitly tabulated.
 
     angle_block = ace_table.angular_distribution_block
 
@@ -334,7 +363,9 @@ for ace_name in pbar:
     data = angle_block.angular_distribution_data(0)
     for subdata in data.distributions:
         if not isinstance(subdata, ACEtk.continuous.TabulatedAngularDistribution):
-            print_error("Unsupported elastic scattering angular distribution")
+            raise DataLibraryGenerationError(
+                "Unsupported elastic scattering angular distribution"
+            )
     util.load_cosine_distribution(data, angle_group)
 
     # Inelastic scattering and fission
@@ -351,9 +382,15 @@ for ace_name in pbar:
     # ==================================================================================
     # Energy distributions
     # ==================================================================================
-    """
-    TODO
-    """
+    # A reaction can select one energy law or a mixture of laws.  Single-law
+    # reactions receive a unit probability over the supported energy range;
+    # multi-law reactions additionally store their incident-energy-dependent
+    # selection probabilities.
+    #
+    # TODO: Derive the single-law probability grid from the ACE table bounds
+    # instead of the hard-coded 0--30 MeV interval.
+    # TODO: Coordinate multi-law fission support with the HDF5 reader; the
+    # current runtime reader rejects more than one prompt-fission spectrum.
 
     energy_block = ace_table.energy_distribution_block
 
@@ -386,7 +423,12 @@ for ace_name in pbar:
                 # Probabilities
                 # ======================================================================
 
-                # Constant probability
+                # No explicit interpolation-region metadata.
+                #
+                # FIXME: ACE's default interpolation may still describe an
+                # energy-dependent probability curve.  Replacing that curve by
+                # its maximum changes the law mixture.  Preserve the original
+                # grid, values, and default interpolation instead.
                 if all(
                     np.array(
                         [x.number_interpolation_regions for x in data.probabilities]
@@ -398,7 +440,8 @@ for ace_name in pbar:
                     for i in range(N_dist):
                         probability[0, i] = max(data.probability(i + 1).probabilities)
 
-                # Histogram probability
+                # Histogram probability.  All component laws must currently
+                # share one incident-energy grid.
                 elif all(
                     np.array(
                         [x.number_interpolation_regions for x in data.probabilities]
@@ -412,13 +455,17 @@ for ace_name in pbar:
                             probability_grid
                             == np.array(data.probability(i + 1).energies)
                         ):
-                            print_error("Unsupported multi-distribution energy spetrum")
+                            raise DataLibraryGenerationError(
+                                "Unsupported multi-distribution energy spetrum"
+                            )
                         probability[:, i] = np.array(
                             data.probability(i + 1).probabilities[:-1]
                         )
 
                 else:
-                    print_error("Unsupported multi-distribution energy spetrum")
+                    raise DataLibraryGenerationError(
+                        "Unsupported multi-distribution energy spetrum"
+                    )
 
                 dataset = group.create_dataset(
                     f"MT-{MT:03}/spectrum_probability_grid", data=probability_grid
@@ -429,7 +476,7 @@ for ace_name in pbar:
                 )
 
                 # ======================================================================
-                # The disributions
+                # The distributions
                 # ======================================================================
 
                 for i in range(N_dist):
@@ -439,16 +486,23 @@ for ace_name in pbar:
                     distribution = data.distribution(i + 1)
                     util.load_energy_distribution(distribution, energy_group)
 
-    # Fissionable zone below
+    # Fission-only data follow.  Non-fissionable tables are complete here.
+    #
+    # TODO: Use a context manager for each HDF5 file.  This early continue skips
+    # the explicit close below and relies on object destruction to flush data.
     if not fissionable:
         continue
 
     # ==================================================================================
-    # Fission multiplicities and delayed neutron precursor fractions and decay rates
+    # Fission multiplicities and delayed-neutron precursor data
     # ==================================================================================
-    """
-    TODO
-    """
+    # Prompt and delayed multiplicities are stored independently.  When delayed
+    # precursor data exist, the generator also stores group fractions and decay
+    # constants for time-dependent transport.
+    #
+    # TODO: Define a complete prompt-only fission schema.  The generator makes
+    # delayed blocks optional, while the current nuclide reader expects them for
+    # every fissionable table.
 
     prompt_block = ace_table.fission_multiplicity_block
     delayed_block = ace_table.delayed_fission_multiplicity_block
@@ -472,6 +526,8 @@ for ace_name in pbar:
         decay_rates = np.zeros(N_DNP)
 
         for i in range(N_DNP):
+            # FIXME: This should address each one-based precursor index with
+            # ``i + 1``.  As written, every output group duplicates ACE group 2.
             idx = 1 + 1
             data = dnp_block.precursor_group_data(idx)
 
@@ -480,7 +536,9 @@ for ace_name in pbar:
                 or not len(data.probabilities[:]) == 2
                 or not data.probabilities[0] == data.probabilities[1]
             ):
-                print_error("Non-constant delayed neutron precursor fraction")
+                raise DataLibraryGenerationError(
+                    "Non-constant delayed neutron precursor fraction"
+                )
 
             fractions[i] = data.probabilities[0]
             decay_rates[i] = data.decay_constant
@@ -491,22 +549,25 @@ for ace_name in pbar:
         decay_rates.attrs["unit"] = "/s"
 
     # ==================================================================================
-    # Delayed fission spectra
+    # Delayed-fission spectra
     # ==================================================================================
-    """
-    TODO
-    """
+    # Store one outgoing-energy spectrum per delayed-neutron precursor group.
+    # Only tabulated spectra are accepted by this path at present.
 
     delayed_spectrum_block = ace_table.delayed_neutron_energy_distribution_block
     if dnp_block is not None:
         N_DNP = dnp_block.number_delayed_precursors
 
         for i in range(N_DNP):
+            # FIXME: This should be ``i + 1``.  The current expression copies
+            # delayed spectrum 2 into every precursor group.
             idx = 1 + 1
             data = delayed_spectrum_block.energy_distribution_data(idx)
 
             if not isinstance(data, ACEtk.continuous.OutgoingEnergyDistributionData):
-                print_error(f"Unsupported delayed fission neutron spectrum: {data}")
+                raise DataLibraryGenerationError(
+                    f"Unsupported delayed fission neutron spectrum: {data}"
+                )
 
             energy_group = fission_group.create_group(
                 f"delayed_neutron_precursors/energy_spectrum-{i+1}"
@@ -516,6 +577,8 @@ for ace_name in pbar:
     # ==================================================================================
     # Finalize
     # ==================================================================================
+    # TODO: Validate the completed HDF5 schema before making it visible in
+    # MCDC_LIB, then close and atomically rename the temporary file.
 
     file.close()
 

@@ -1,18 +1,48 @@
+"""Helpers for converting ACE continuous-energy neutron data to MC/DC HDF5.
+
+The functions in this module translate ACEtk objects into the intermediate
+HDF5 schema consumed by :mod:`mcdc.object_.nuclide` and
+:mod:`mcdc.object_.neutron_reaction`.  Energies are stored in MeV, cross
+sections in barns, and probability densities retain their ACE units unless a
+function explicitly documents otherwise.
+
+This module is a format converter, not a sampler.  It must therefore preserve
+all information needed by MC/DC's runtime samplers, including interpolation
+rules, discrete probability mass, reference frames, and correlated variables.
+"""
+
+from typing import Any
+
 import ACEtk
 import h5py
 import numpy as np
 
-
-def print_error(message):
-    print(f"\n  [ERROR]: {message}\n")
-    exit()
+from constant import ACE_TEMPERATURE_LIB81, Z_TO_SYMBOL
 
 
-def print_note(message):
-    print(f"\n  [NOTE]: {message}\n")
+class DataLibraryGenerationError(RuntimeError):
+    """Raised when ACE data cannot be represented by the MC/DC HDF5 schema."""
 
 
-def decode_name(header):
+def decode_name(header: Any) -> tuple[str, str, int, int, int, float]:
+    """Return MC/DC file and nuclide metadata decoded from an ACE header.
+
+    Parameters
+    ----------
+    header
+        ACEtk header object whose ``zaid`` includes the table suffix.
+
+    Returns
+    -------
+    tuple
+        ``(file_name, nuclide_name, Z, A, isomer, temperature_K)``.
+
+    Notes
+    -----
+    The current implementation assumes the LANL ENDF/B-VIII.1 suffix-to-
+    temperature mapping defined below.  It is not a general ACE-table decoder.
+    """
+
     Z, A, S, T = decode_ace_name(header.zaid)
     symbol = Z_TO_SYMBOL[Z]
     nuclide_name = f"{symbol}{A}" if S == 0 else f"{symbol}{A}m{S}"
@@ -20,14 +50,32 @@ def decode_name(header):
     return mcdc_name, nuclide_name, Z, A, S, T
 
 
-def decode_ace_name(name: str):
-    """
-    Decode an ACE file name into atomic number Z, mass number A, excitation state S,
-    following the rule:
-        ZAID = 1000*Z + A,                      (ground state),
-        ZAID = 1000*Z + A + 300 + 100*S,        (excited, S >= 1),
-    and temperature T.
-    Returns (Z, A, S, T)
+def decode_ace_name(name: str) -> tuple[int, int, int, float]:
+    """Decode a LANL ENDF/B-VIII.1 ACE table identifier.
+
+    The current convention is assumed to be
+
+    ``ZAID = 1000*Z + A`` for a ground state, and
+    ``ZAID = 1000*Z + A + 300 + 100*S`` for isomer ``S >= 1``.
+
+    Parameters
+    ----------
+    name
+        ACE table identifier such as ``"14028.10c"``.
+
+    Returns
+    -------
+    tuple[int, int, int, float]
+        Atomic number, mass number, isomer index, and temperature in kelvin.
+
+    Notes
+    -----
+    FIXME: The inverse isomer calculation below truncates mass numbers greater
+    than 99.  Decode the identity from authoritative ACE metadata or implement
+    the complete ZAID convention before supporting metastable tables.
+
+    TODO: Read the table temperature from the ACE header.  A suffix identifies
+    a library table and is not a universal temperature definition.
     """
     zaid, extension = name.split(".")
 
@@ -50,7 +98,16 @@ def decode_ace_name(name: str):
     return Z, A, S, T
 
 
-def get_zaid(nuclide_name):
+def get_zaid(nuclide_name: str) -> tuple[int, int]:
+    """Return ``(Z, A)`` parsed from a ground-state nuclide name.
+
+    Examples include ``"Si28"`` and ``"U235"``.  Metastable suffixes are not
+    currently supported.
+
+    FIXME: ``Z_MAP`` is undefined; this helper is presently unusable.  Replace
+    it with ``SYMBOL_TO_Z`` and add focused parsing tests before calling it.
+    """
+
     nuclide_name = nuclide_name.strip().capitalize()
 
     # Find where the letters end and digits begin
@@ -72,7 +129,14 @@ def get_zaid(nuclide_name):
     return Z, A
 
 
-def get_ace_name(Z, A, T, S=None):
+def get_ace_name(Z: int, A: int, T: float, S: int | None = None) -> str:
+    """Construct an ACE table identifier from nuclide metadata.
+
+    FIXME: ``ACE_EXTENSION_LIB81`` is undefined and the returned identifier
+    omits the separator before the suffix.  Reconcile this helper with
+    ``TEMPERATURE_TO_ACELIB81`` and test ground-state and metastable names.
+    """
+
     ID = Z * 1000 + A
     if S is not None:
         ID += 300 + S * 100
@@ -80,8 +144,25 @@ def get_ace_name(Z, A, T, S=None):
     return f"{ID}{extension}"
 
 
-def extract_interpolation_data(interpolation_data, tag):
-    interpolations = []
+def extract_interpolation_data(
+    interpolation_data: Any, tag: str
+) -> tuple[list[str], Any]:
+    """Convert ACE interpolation codes to MC/DC interpolation names.
+
+    Parameters
+    ----------
+    interpolation_data
+        ACEtk interpolation-region metadata.
+    tag
+        Human-readable context included in error messages.
+
+    Returns
+    -------
+    tuple[list[str], sequence]
+        Interpolation names and their one-based ACE region boundaries.
+    """
+
+    interpolations: list[str] = []
     for interpolation in interpolation_data.interpolants:
         if interpolation == 1:
             interpolations.append("histogram")
@@ -94,12 +175,27 @@ def extract_interpolation_data(interpolation_data, tag):
         elif interpolation == 5:
             interpolations.append("log")
         else:
-            print_error(f"Unsupported interpolation type in {tag}")
+            raise DataLibraryGenerationError(f"Unsupported interpolation type in {tag}")
     interpolation_boundaries = interpolation_data.boundaries[:]
     return interpolations, interpolation_boundaries
 
 
-def load_fission_multiplicity(data, h5_group: h5py.Group):
+def load_fission_multiplicity(data: Any, h5_group: h5py.Group) -> None:
+    """Write polynomial or tabulated fission multiplicity data to HDF5.
+
+    Parameters
+    ----------
+    data
+        ACEtk fission-multiplicity object.
+    h5_group
+        Destination group for the MC/DC multiplicity schema.
+
+    Notes
+    -----
+    TODO: Preserve non-linear interpolation regions and support any valid ACE
+    multiplicity/yield representations required by the LANL library.
+    """
+
     # Polynomial
     if data.type == 1:
         h5_group.attrs["type"] = "polynomial"
@@ -113,7 +209,9 @@ def load_fission_multiplicity(data, h5_group: h5py.Group):
         h5_group.attrs["type"] = "tabulated"
 
         if not data.interpolation_data.is_linear_linear:
-            print_error("Non linear-linear tabulated multiplicity is not supported")
+            raise DataLibraryGenerationError(
+                "Non linear-linear tabulated multiplicity is not supported"
+            )
 
         energy = np.array(data.energies)
 
@@ -121,13 +219,23 @@ def load_fission_multiplicity(data, h5_group: h5py.Group):
         dataset = h5_group.create_dataset("energy", data=energy)
         dataset.attrs["unit"] = "MeV"
 
-    ## Yield - Unsupported
+    # Yield - unsupported
     else:
-        print(f"[ERROR] Unsupported multiplicity type: {data.type}")
-        exit()
+        raise DataLibraryGenerationError(f"Unsupported multiplicity type: {data.type}")
 
 
-def load_cosine_distribution(data, h5_group: h5py.Group):
+def load_cosine_distribution(data: Any, h5_group: h5py.Group) -> None:
+    """Write an ACE angular-cosine distribution to HDF5.
+
+    Fully isotropic and energy-correlated angular laws are represented by a
+    type attribute.  Explicit angular data are flattened into incident-energy,
+    offset, cosine, and PDF arrays.
+
+    TODO: Preserve per-table interpolation codes and support ACE equiprobable
+    angular bins.  The current path accepts only tabulated, linearly
+    interpolated cosine distributions.
+    """
+
     if isinstance(data, ACEtk.continuous.FullyIsotropicDistribution):
         h5_group.attrs["type"] = "isotropic"
 
@@ -142,14 +250,16 @@ def load_cosine_distribution(data, h5_group: h5py.Group):
         for i in range(NE):
             idx = i + 1
             if data.distribution_type(idx) != ACEtk.AngularDistributionType.Tabulated:
-                print_error("Angular distribution is not all-tabulated")
+                raise DataLibraryGenerationError(
+                    "Angular distribution is not all-tabulated"
+                )
 
         # Incident energy
         energy = np.array(data.incident_energies)
         energy = h5_group.create_dataset("energy", data=energy)
         energy.attrs["unit"] = "MeV"
 
-        # Tabulated disstributions
+        # Tabulated distributions
         interpolation = np.zeros(NE, dtype=int)
         offset = np.zeros(NE, dtype=int)
         cosine = []
@@ -166,10 +276,32 @@ def load_cosine_distribution(data, h5_group: h5py.Group):
         h5_group.create_dataset("pdf", data=pdf)
 
         if not all(interpolation == 2):
-            print_error("Angular distribution is not linearly-iterpolable")
+            raise DataLibraryGenerationError(
+                "Angular distribution is not linearly-iterpolable"
+            )
 
 
-def load_energy_distribution(data, h5_group: h5py.Group):
+def load_energy_distribution(data: Any, h5_group: h5py.Group) -> None:
+    """Write one ACE outgoing-energy law to the MC/DC HDF5 schema.
+
+    Supported branches currently include level scattering, evaporation,
+    Maxwellian, tabulated energy, Kalbach--Mann, correlated energy--angle, and
+    a reduced N-body representation.  Unsupported ACE laws terminate the
+    generator by raising :class:`DataLibraryGenerationError`.
+
+    Parameters
+    ----------
+    data
+        ACEtk outgoing-energy distribution object.
+    h5_group
+        Destination group beneath an MC/DC reaction.
+
+    Notes
+    -----
+    TODO: Add an explicit capability table and support the remaining ACE laws
+    used by the LANL library, including Watt and other transfer laws.
+    """
+
     if isinstance(data, ACEtk.continuous.LevelScatteringDistribution):
         h5_group.attrs["type"] = "level-scattering"
 
@@ -212,6 +344,8 @@ def load_energy_distribution(data, h5_group: h5py.Group):
         temperature = np.array(data.temperatures)
         restriction_energy = np.array(data.restriction_energy)
 
+        # FIXME: The runtime loader expects "temperature_interpolations"
+        # (plural).  Rename this dataset together with a schema regression test.
         h5_group.create_dataset("temperature_interpolation", data=interpolations)
         h5_group.create_dataset(
             "interpolation_boundaries", data=interpolation_boundaries
@@ -226,8 +360,15 @@ def load_energy_distribution(data, h5_group: h5py.Group):
     elif isinstance(data, ACEtk.continuous.OutgoingEnergyDistributionData):
         h5_group.attrs["type"] = "tabulated"
 
+        # This checks interpolation between incident-energy tables only.  Each
+        # outgoing-energy table also carries its own interpolation code and can
+        # begin with discrete lines.
+        #
+        # FIXME: Preserve each inner interpolation code, discrete probability
+        # mass, and ACE CDF.  The current HDF5 consumer reconstructs every table
+        # as a continuous, piecewise-linear PDF, which changes valid ACE data.
         if not data.interpolation_data.is_linear_linear:
-            print_error(
+            raise DataLibraryGenerationError(
                 "Non-linearly-interpolated energy distribution is not supported"
             )
 
@@ -258,8 +399,12 @@ def load_energy_distribution(data, h5_group: h5py.Group):
     elif isinstance(data, ACEtk.continuous.KalbachMannDistributionData):
         h5_group.attrs["type"] = "kalbach-mann"
 
+        # TODO: Preserve and validate the interpolation type of every outgoing-
+        # energy table, not only interpolation across incident energy.
         if not data.interpolation_data.is_linear_linear:
-            print_error("Non-linearly-interpolated kalbach-mann is not supported")
+            raise DataLibraryGenerationError(
+                "Non-linearly-interpolated kalbach-mann is not supported"
+            )
 
         # Check distribution support: all kalbach-mann
         NE = data.number_incident_energies
@@ -297,8 +442,10 @@ def load_energy_distribution(data, h5_group: h5py.Group):
     elif isinstance(data, ACEtk.continuous.EnergyAngleDistributionData):
         h5_group.attrs["type"] = "energy-angle-tabulated"
 
+        # TODO: Preserve interpolation metadata and ACE CDFs for both the
+        # outgoing-energy tables and their conditional angular distributions.
         if not data.interpolation_data.is_linear_linear:
-            print_error(
+            raise DataLibraryGenerationError(
                 "Non-linearly-interpolated correlated-energy-angle is not supported"
             )
 
@@ -345,134 +492,17 @@ def load_energy_distribution(data, h5_group: h5py.Group):
         h5_group.attrs["type"] = "N-body"
 
         if data.interpolation != 2:
-            print_error("Non-linearly-interpolable N-body energy distribution")
+            raise DataLibraryGenerationError(
+                "Non-linearly-interpolable N-body energy distribution"
+            )
 
+        # FIXME: ACE LAW 66 values are normalized phase-space coordinates, not
+        # energies in MeV.  Preserve number_particles and total_mass_ratio, then
+        # apply the incident-energy-dependent phase-space kinematics at runtime.
+        # The current reduced representation cannot reproduce LAW 66.
         dataset = h5_group.create_dataset("value", data=data.values)
         dataset.attrs["unit"] = "MeV"
         h5_group.create_dataset("pdf", data=data.pdf)
 
     else:
-        print_error(f"Unsupported energy distribution: {data}")
-
-
-# ======================================================================================
-# Constants
-# ======================================================================================
-
-ACE_TEMPERATURE_LIB81 = {
-    "10c": 293.6,
-    "11c": 600.0,
-    "12c": 900.0,
-    "13c": 1200.0,
-    "14c": 2500.0,
-    "15c": 0.1,
-    "16c": 233.15,
-    "17c": 273.15,
-}
-
-TEMPERATURE_TO_ACELIB81 = {value: key for key, value in ACE_TEMPERATURE_LIB81.items()}
-
-SYMBOL_TO_Z = {
-    "H": 1,
-    "He": 2,
-    "Li": 3,
-    "Be": 4,
-    "B": 5,
-    "C": 6,
-    "N": 7,
-    "O": 8,
-    "F": 9,
-    "Ne": 10,
-    "Na": 11,
-    "Mg": 12,
-    "Al": 13,
-    "Si": 14,
-    "P": 15,
-    "S": 16,
-    "Cl": 17,
-    "Ar": 18,
-    "K": 19,
-    "Ca": 20,
-    "Sc": 21,
-    "Ti": 22,
-    "V": 23,
-    "Cr": 24,
-    "Mn": 25,
-    "Fe": 26,
-    "Co": 27,
-    "Ni": 28,
-    "Cu": 29,
-    "Zn": 30,
-    "Ga": 31,
-    "Ge": 32,
-    "As": 33,
-    "Se": 34,
-    "Br": 35,
-    "Kr": 36,
-    "Rb": 37,
-    "Sr": 38,
-    "Y": 39,
-    "Zr": 40,
-    "Nb": 41,
-    "Mo": 42,
-    "Tc": 43,
-    "Ru": 44,
-    "Rh": 45,
-    "Pd": 46,
-    "Ag": 47,
-    "Cd": 48,
-    "In": 49,
-    "Sn": 50,
-    "Sb": 51,
-    "Te": 52,
-    "I": 53,
-    "Xe": 54,
-    "Cs": 55,
-    "Ba": 56,
-    "La": 57,
-    "Ce": 58,
-    "Pr": 59,
-    "Nd": 60,
-    "Pm": 61,
-    "Sm": 62,
-    "Eu": 63,
-    "Gd": 64,
-    "Tb": 65,
-    "Dy": 66,
-    "Ho": 67,
-    "Er": 68,
-    "Tm": 69,
-    "Yb": 70,
-    "Lu": 71,
-    "Hf": 72,
-    "Ta": 73,
-    "W": 74,
-    "Re": 75,
-    "Os": 76,
-    "Ir": 77,
-    "Pt": 78,
-    "Au": 79,
-    "Hg": 80,
-    "Tl": 81,
-    "Pb": 82,
-    "Bi": 83,
-    "Po": 84,
-    "At": 85,
-    "Rn": 86,
-    "Fr": 87,
-    "Ra": 88,
-    "Ac": 89,
-    "Th": 90,
-    "Pa": 91,
-    "U": 92,
-    "Np": 93,
-    "Pu": 94,
-    "Am": 95,
-    "Cm": 96,
-    "Bk": 97,
-    "Cf": 98,
-    "Es": 99,
-    "Fm": 100,
-}
-
-Z_TO_SYMBOL = {value: key for key, value in SYMBOL_TO_Z.items()}
+        raise DataLibraryGenerationError(f"Unsupported energy distribution: {data}")

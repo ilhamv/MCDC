@@ -193,8 +193,6 @@ ARENA_SIZE = 0
 BLOCK_COUNT = 0
 
 
-
-
 def build_gpu_program(data_size):
     import harmonize
     import mcdc.numba_types as type_

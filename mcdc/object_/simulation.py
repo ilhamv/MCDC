@@ -436,16 +436,6 @@ class Simulation(MCDCBase):
         self.bank_source.size[0] = int(settings.source_bank_buffer_ratio * N_work)
         self.bank_future.size[0] = int(settings.future_bank_buffer_ratio * N_work)
 
-        # ==================================================================================
-        # Platform targeting, adapters, and toggles for portability
-        # ==================================================================================
-
-        import mcdc.config as config
-
-        # Build GPU program if desired
-        if config.target == "gpu":
-            from mcdc.code_factory.gpu.program_builder import build_gpu_program
-
         # Initialize run state derived from the compiled settings
         self.k_eff = settings.k_init
         self.cycle_active = (

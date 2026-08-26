@@ -80,8 +80,4 @@ def source_loop(seed, simulation, data):
 
     particle_bank_module.set_bank_size(simulation["bank_active"], 0)
 
-    # =====================================================================
-    # Closeout (Moved out of the typical particle loop)
-    # =====================================================================
-
     source_closeout(simulation, 1, 1, data)

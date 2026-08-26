@@ -40,18 +40,6 @@ type_map = {
     np.uintp: np.uintp,
 }
 
-size_map = {
-    bool: 1,
-    float: 8,
-    int: 8,
-    str: 32,
-    np.bool_: 1,
-    np.float64: 8,
-    np.int64: 8,
-    np.uint64: 8,
-    np.str_: 32,
-}
-
 bank_names = ["bank_active", "bank_census", "bank_source", "bank_future"]
 
 

@@ -94,7 +94,6 @@ def _prepare_gpu_program(simulation_dtype, data_size):
 
 def forward_declare_gpu_program(simulation_dtype):
     import harmonize
-
     import mcdc.numba_types as type_
 
     # Get to set the globals
@@ -194,99 +193,10 @@ ARENA_SIZE = 0
 BLOCK_COUNT = 0
 
 
-# Compiles gpu kernels and loads in the functions that call into said kernels
-def build_gpu_progs(input_deck):
-
-    STRAT = config.args.gpu_strategy
-
-    src_spec = gpu_sources_spec()
-
-    adapt.harm.RuntimeSpec.bind_specs()
-
-    rank = MPI.COMM_WORLD.Get_rank()
-    device_id = rank % config.args.gpu_share_stride
-
-    if MPI.COMM_WORLD.Get_size() > 1:
-        MPI.COMM_WORLD.Barrier()
-
-    adapt.harm.RuntimeSpec.load_specs()
-
-    if STRAT == "async":
-        config.args.gpu_arena_size = config.args.gpu_arena_size // 32
-        src_fns = src_spec.async_functions()
-        pre_fns = pre_spec.async_functions()
-    else:
-        src_fns = src_spec.event_functions()
-        pre_fns = pre_spec.event_functions()
-
-    ARENA_SIZE = config.args.gpu_arena_size
-    BLOCK_COUNT = config.args.gpu_block_count
-
-    global alloc_state, free_state
-    alloc_state = src_fns["alloc_state"]
-    free_state = src_fns["free_state"]
-
-    global src_alloc_program, src_free_program
-    global src_load_global, src_store_global, src_load_data, src_store_data, src_store_pointer_data
-    global src_init_program, src_exec_program, src_complete, src_clear_flags
-    src_alloc_program = src_fns["alloc_program"]
-    src_free_program = src_fns["free_program"]
-    src_load_global = src_fns["load_state_device_global"]
-    src_store_global = src_fns["store_state_device_global"]
-    src_store_pointer_global = src_fns["store_pointer_state_device_global"]
-    src_load_data = src_fns["load_state_device_data"]
-    src_store_data = src_fns["store_state_device_data"]
-    src_store_pointer_data = src_fns["store_pointer_state_device_data"]
-    src_init_program = src_fns["init_program"]
-    src_exec_program = src_fns["exec_program"]
-    src_complete = src_fns["complete"]
-    src_clear_flags = src_fns["clear_flags"]
-    src_set_device = src_fns["set_device"]
-
-    global pre_alloc_program, pre_free_program
-    global pre_load_global, pre_store_global, pre_load_data, pre_store_data
-    global pre_init_program, pre_exec_program, pre_complete, pre_clear_flags
-    pre_alloc_state = pre_fns["alloc_state"]
-    pre_free_state = pre_fns["free_state"]
-    pre_alloc_program = pre_fns["alloc_program"]
-    pre_free_program = pre_fns["free_program"]
-    pre_load_global = pre_fns["load_state_device_global"]
-    pre_store_global = pre_fns["store_state_device_global"]
-    pre_load_data = pre_fns["load_state_device_data"]
-    pre_store_data = pre_fns["store_state_device_data"]
-    pre_init_program = pre_fns["init_program"]
-    pre_exec_program = pre_fns["exec_program"]
-    pre_complete = pre_fns["complete"]
-    pre_clear_flags = pre_fns["clear_flags"]
-
-    @njit
-    def real_setup_gpu(mcdc_array, data_tally):
-        mcdc = mcdc_array[0]
-
-        src_set_device(device_id)
-        arena_size = ARENA_SIZE
-        mcdc["gpu_meta"]["state_pointer"] = adapt.cast_voidptr_to_uintp(alloc_state())
-        # src_store_global(mcdc["gpu_meta"]["state_pointer"], mcdc_array[0])
-        if config.gpu_state_storage == "separate":
-            harmonize.memcpy_device_to_host(
-                simulation, simulation["gpu_meta"]["simulation_pointer"]
-            )
-            harmonize.memcpy_device_to_host(
-                data, simulation["gpu_meta"]["data_pointer"]
-            )
-
-        gpu_module.clear_flags(simulation["gpu_meta"]["program_pointer"])
-
-    simulation["mpi_work_size"] = full_work_size
-
-    particle_bank_module.set_bank_size(simulation["bank_active"], 0)
-
-    source_closeout(simulation, 1, 1, data)
 
 
 def build_gpu_program(data_size):
     import harmonize
-
     import mcdc.numba_types as type_
     import mcdc.transport.util as util
     from mcdc.transport.simulation import generate_source_particle, step_particle
@@ -404,19 +314,6 @@ def build_gpu_program(data_size):
     complete = src_fns["complete"]
     clear_flags = src_fns["clear_flags"]
     set_device = src_fns["set_device"]
-
-    # ==================================================================================
-    #
-    # ==================================================================================
-
-    """
-    global loop_source
-    loop_source = gpu_loop_source
-    #
-    # Overwrite function
-    for impl in target_rosters["cpu"].values():
-        overwrite_func(impl, impl)
-    """
 
     alloc_managed_bytes = harmonize.alloc_managed_bytes
     alloc_device_bytes = harmonize.alloc_device_bytes

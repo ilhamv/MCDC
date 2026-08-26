@@ -1,22 +1,4 @@
-"""Lookup tables used by the neutron data-library generator."""
-
-# LANL ENDF/B-VIII.1 table-suffix convention used by the current generator.
-# TODO: Prefer the temperature stored in the ACE header and retain the suffix
-# as provenance, so custom or future LANL tables do not require code changes.
-ACE_TEMPERATURE_LIB81 = {
-    "10c": 293.6,
-    "11c": 600.0,
-    "12c": 900.0,
-    "13c": 1200.0,
-    "14c": 2500.0,
-    "15c": 0.1,
-    "16c": 233.15,
-    "17c": 273.15,
-}
-
-TEMPERATURE_TO_ACELIB81 = {value: key for key, value in ACE_TEMPERATURE_LIB81.items()}
-
-SYMBOL_TO_Z = {
+Z_FROM_SYMBOL = {
     "H": 1,
     "He": 2,
     "Li": 3,
@@ -119,4 +101,4 @@ SYMBOL_TO_Z = {
     "Fm": 100,
 }
 
-Z_TO_SYMBOL = {value: key for key, value in SYMBOL_TO_Z.items()}
+SYMBOL_FROM_Z = {value: key for key, value in Z_FROM_SYMBOL.items()}

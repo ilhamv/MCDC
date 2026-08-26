@@ -16,86 +16,55 @@ from typing import Any
 import ACEtk
 import h5py
 import numpy as np
+from scipy.constants import Boltzmann, electron_volt
 
-from constant import ACE_TEMPERATURE_LIB81, Z_TO_SYMBOL
+from constant import SYMBOL_FROM_Z, Z_FROM_SYMBOL
+
+# ======================================================================================
+# Exceptions
+# ======================================================================================
 
 
 class DataLibraryGenerationError(RuntimeError):
     """Raised when ACE data cannot be represented by the MC/DC HDF5 schema."""
 
 
-def decode_name(header: Any) -> tuple[str, str, int, int, int, float]:
-    """Return MC/DC file and nuclide metadata decoded from an ACE header.
+# ======================================================================================
+# ACE table identity and temperature
+# ======================================================================================
+
+
+def decode_name(
+    ace_table: ACEtk.ContinuousEnergyTable,
+) -> tuple[str, str, int, int, int, float, str]:
+    """Return MC/DC file and nuclide metadata from a parsed ACE table.
 
     Parameters
     ----------
-    header
-        ACEtk header object whose ``zaid`` includes the table suffix.
+    ace_table
+        Parsed continuous-energy table.  ACEtk provides its authoritative
+        atomic number, mass number, and isomeric state.
 
     Returns
     -------
     tuple
-        ``(file_name, nuclide_name, Z, A, isomer, temperature_K)``.
+        ``(file_name, nuclide_name, Z, A, isomer, temperature_K, suffix)``.
 
-    Notes
-    -----
-    The current implementation assumes the LANL ENDF/B-VIII.1 suffix-to-
-    temperature mapping defined below.  It is not a general ACE-table decoder.
+    The ACE header temperature is stored as thermal energy in MeV and converted
+    to kelvin for the MC/DC library.  The filename uses the temperature rounded
+    to two decimal places, while the returned temperature retains full precision.
     """
 
-    Z, A, S, T = decode_ace_name(header.zaid)
-    symbol = Z_TO_SYMBOL[Z]
+    header = ace_table.header
+    _, suffix = header.zaid.rsplit(".", maxsplit=1)
+    Z = ace_table.atom_number
+    A = ace_table.mass_number
+    S = ace_table.isomeric_state
+    T = header.temperature * 1e6 * electron_volt / Boltzmann
+    symbol = SYMBOL_FROM_Z[Z]
     nuclide_name = f"{symbol}{A}" if S == 0 else f"{symbol}{A}m{S}"
-    mcdc_name = f"{nuclide_name}-{T}K.h5"
-    return mcdc_name, nuclide_name, Z, A, S, T
-
-
-def decode_ace_name(name: str) -> tuple[int, int, int, float]:
-    """Decode a LANL ENDF/B-VIII.1 ACE table identifier.
-
-    The current convention is assumed to be
-
-    ``ZAID = 1000*Z + A`` for a ground state, and
-    ``ZAID = 1000*Z + A + 300 + 100*S`` for isomer ``S >= 1``.
-
-    Parameters
-    ----------
-    name
-        ACE table identifier such as ``"14028.10c"``.
-
-    Returns
-    -------
-    tuple[int, int, int, float]
-        Atomic number, mass number, isomer index, and temperature in kelvin.
-
-    Notes
-    -----
-    FIXME: The inverse isomer calculation below truncates mass numbers greater
-    than 99.  Decode the identity from authoritative ACE metadata or implement
-    the complete ZAID convention before supporting metastable tables.
-
-    TODO: Read the table temperature from the ACE header.  A suffix identifies
-    a library table and is not a universal temperature definition.
-    """
-    zaid, extension = name.split(".")
-
-    zaid = int(zaid)
-    Z = zaid // 1000
-    remainder = zaid % 1000
-
-    if remainder < 300:
-        # ground state
-        A = remainder
-        S = 0
-    else:
-        # excited state
-        offset = remainder - 300
-        S = offset // 100
-        A = offset % 100
-
-    T = ACE_TEMPERATURE_LIB81[extension]
-
-    return Z, A, S, T
+    mcdc_name = f"{nuclide_name}-{round(T, 2)}K.h5"
+    return mcdc_name, nuclide_name, Z, A, S, T, suffix
 
 
 def get_zaid(nuclide_name: str) -> tuple[int, int]:
@@ -104,8 +73,8 @@ def get_zaid(nuclide_name: str) -> tuple[int, int]:
     Examples include ``"Si28"`` and ``"U235"``.  Metastable suffixes are not
     currently supported.
 
-    FIXME: ``Z_MAP`` is undefined; this helper is presently unusable.  Replace
-    it with ``SYMBOL_TO_Z`` and add focused parsing tests before calling it.
+    Element symbols are resolved through the shared data-library-generator
+    lookup table.
     """
 
     nuclide_name = nuclide_name.strip().capitalize()
@@ -121,27 +90,26 @@ def get_zaid(nuclide_name: str) -> tuple[int, int]:
     else:
         raise ValueError(f"No mass number found in '{nuclide_name}'")
 
-    if symbol not in Z_MAP.keys():
+    if symbol not in Z_FROM_SYMBOL:
         raise ValueError(f"Unknown element symbol '{symbol}'")
 
-    Z = Z_MAP[symbol]
+    Z = Z_FROM_SYMBOL[symbol]
     A = mass
     return Z, A
 
 
-def get_ace_name(Z: int, A: int, T: float, S: int | None = None) -> str:
-    """Construct an ACE table identifier from nuclide metadata.
-
-    FIXME: ``ACE_EXTENSION_LIB81`` is undefined and the returned identifier
-    omits the separator before the suffix.  Reconcile this helper with
-    ``TEMPERATURE_TO_ACELIB81`` and test ground-state and metastable names.
-    """
+def get_ace_name(Z: int, A: int, suffix: str, S: int | None = None) -> str:
+    """Construct an ACE table identifier from nuclide metadata and suffix."""
 
     ID = Z * 1000 + A
     if S is not None:
         ID += 300 + S * 100
-    extension = ACE_EXTENSION_LIB81[T]
-    return f"{ID}{extension}"
+    return f"{ID}.{suffix}"
+
+
+# ======================================================================================
+# Interpolation metadata
+# ======================================================================================
 
 
 def extract_interpolation_data(
@@ -178,6 +146,11 @@ def extract_interpolation_data(
             raise DataLibraryGenerationError(f"Unsupported interpolation type in {tag}")
     interpolation_boundaries = interpolation_data.boundaries[:]
     return interpolations, interpolation_boundaries
+
+
+# ======================================================================================
+# Fission multiplicity
+# ======================================================================================
 
 
 def load_fission_multiplicity(data: Any, h5_group: h5py.Group) -> None:
@@ -222,6 +195,11 @@ def load_fission_multiplicity(data: Any, h5_group: h5py.Group) -> None:
     # Yield - unsupported
     else:
         raise DataLibraryGenerationError(f"Unsupported multiplicity type: {data.type}")
+
+
+# ======================================================================================
+# Angular distributions
+# ======================================================================================
 
 
 def load_cosine_distribution(data: Any, h5_group: h5py.Group) -> None:
@@ -279,6 +257,11 @@ def load_cosine_distribution(data: Any, h5_group: h5py.Group) -> None:
             raise DataLibraryGenerationError(
                 "Angular distribution is not linearly-iterpolable"
             )
+
+
+# ======================================================================================
+# Energy distributions
+# ======================================================================================
 
 
 def load_energy_distribution(data: Any, h5_group: h5py.Group) -> None:

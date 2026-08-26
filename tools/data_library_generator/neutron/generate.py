@@ -17,8 +17,14 @@ import argparse
 import h5py
 import numpy as np
 import os
+from pathlib import Path
+import sys
 
 from tqdm import tqdm
+
+# Make the shared data-library-generator constants importable when this file is
+# executed directly from the neutron directory.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import util
 from util import DataLibraryGenerationError
@@ -61,12 +67,10 @@ else:
     # Just get the non-existent ones
     target_files = []
     for file_name in os.listdir(ace_dir):
-        # File header
-        with open(f"{ace_dir}/{file_name}", "r") as f:
-            header = ACEtk.Header.from_string(f.readline())
+        ace_table = ACEtk.ContinuousEnergyTable.from_file(f"{ace_dir}/{file_name}")
 
-        # Decode ACE name to MC/DC name
-        mcdc_name, nuclide_name, Z, A, S, T = util.decode_name(header)
+        # Decode ACE metadata to MC/DC name
+        mcdc_name, nuclide_name, Z, A, S, T, suffix = util.decode_name(ace_table)
 
         if not os.path.exists(f"{output_dir}/{mcdc_name}"):
             target_files.append(file_name)
@@ -78,12 +82,12 @@ pbar = tqdm(
     bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}{postfix}",
 )
 for ace_name in pbar:
-    # File header
-    with open(f"{ace_dir}/{ace_name}", "r") as f:
-        header = ACEtk.Header.from_string(f.readline())
+    # Parse the complete table so ACEtk can provide authoritative nuclide
+    # identity, including the isomeric state.
+    ace_table = ACEtk.ContinuousEnergyTable.from_file(f"{ace_dir}/{ace_name}")
 
-    # Decode ACE name to MC/DC name
-    mcdc_name, nuclide_name, Z, A, S, T = util.decode_name(header)
+    # Decode ACE metadata to MC/DC name
+    mcdc_name, nuclide_name, Z, A, S, T, suffix = util.decode_name(ace_table)
 
     # Rewrite or skip?
     if not rewrite and os.path.exists(f"{output_dir}/{mcdc_name}"):
@@ -106,14 +110,15 @@ for ace_name in pbar:
     # Store ACE provenance, nuclide identity, temperature, atomic properties,
     # and whether a fission multiplicity block is present.
 
-    # Load ACE tables
-    ace_table = ACEtk.ContinuousEnergyTable.from_file(f"{ace_dir}/{ace_name}")
-
     # ACE data source description
     header = ace_table.header
     file.attrs["source_title"] = header.title
     file.attrs["source_version"] = header.version
     file.attrs["source_date"] = header.date
+    file.attrs["source_zaid"] = header.zaid
+    file.attrs["source_suffix"] = suffix
+    file.attrs["source_temperature"] = header.temperature
+    file.attrs["source_temperature_unit"] = "MeV"
     if "comments" in dir(header):
         file.attrs["source_comments"] = header.comments
 
@@ -121,8 +126,7 @@ for ace_name in pbar:
     file.create_dataset("nuclide_name", data=nuclide_name)
     file.create_dataset("excitation_level", data=S)
 
-    # Temperature decoded from the LANL table suffix by util.decode_name().
-    # TODO: Cross-check this against the temperature recorded in the ACE header.
+    # Physical temperature converted from the ACE header's thermal energy.
     temperature = file.create_dataset("temperature", data=T)
     temperature.attrs["unit"] = "K"
 

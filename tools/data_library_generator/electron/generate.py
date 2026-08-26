@@ -3,17 +3,18 @@ import argparse
 import h5py
 import numpy as np
 import os
+from pathlib import Path
+import sys
 
 from tqdm import tqdm
 
-####
+# Make shared data-library-generator modules importable when this file is
+# executed directly from the electron directory.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import util
+from constant import SYMBOL_FROM_Z
 from util import print_error
-
-import sys
-
-sys.path.append("/Users/melekderman/Documents/GitHub/branch/Acetk-e/ACEtk/build/python")
 
 parser = argparse.ArgumentParser(description="MC/DC electron data generator")
 parser.add_argument("--rewrite", dest="rewrite", action="store_true", default=False)
@@ -47,7 +48,7 @@ for zaid in table_map:
         continue
 
     Z = util.decode_epr_zaid(zaid)
-    symbol = util.Z_TO_SYMBOL[Z]
+    symbol = SYMBOL_FROM_Z[Z]
     mcdc_name = f"{symbol}.h5"
 
     if not rewrite and os.path.exists(f"{output_dir}/{mcdc_name}"):

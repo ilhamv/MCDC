@@ -37,17 +37,23 @@ python generate.py --verbose    # Print detailed per-nuclide info
 
 For each ACE file in `$MCDC_ACELIB`, the generator:
 
-1. Reads the ACE header to identify the nuclide (Z, A, isomeric state) and temperature.
+1. Uses ACEtk's parsed table metadata to identify the nuclide (Z, A, isomeric
+   state), then reads the table suffix and physical temperature from the ACE
+   header. The ACE thermal energy is converted from MeV to kelvin.
 2. Extracts pointwise cross sections (elastic, capture, inelastic, fission) and the energy grid.
 3. Extracts angular distributions (tabulated cosine PDFs) and energy distributions
    (level scattering, evaporation, Maxwellian, Kalbach-Mann, N-body, tabulated) per reaction channel.
 4. For fissionable nuclides, extracts prompt/delayed ν(E), precursor fractions, decay constants, and energy spectra.
-5. Writes a single HDF5 file per nuclide-temperature combination (e.g., `U235-293.6K.h5`).
+5. Writes a single HDF5 file per nuclide and header-temperature combination.
 
 ## Output HDF5 Schema
 
 ```
 <Nuclide>-<Temperature>K.h5
+├── attributes
+│   ├── source_zaid
+│   ├── source_suffix
+│   └── source_temperature      (MeV)
 ├── nuclide_name              (string)
 ├── temperature               (float, K)
 ├── atomic_weight_ratio       (float)

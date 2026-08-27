@@ -16,7 +16,7 @@ import numpy as np
 from numba import njit
 
 import mcdc.transport.util as util
-import mcdc.transport.geometry.root_solve as root_solve
+import mcdc.transport.geometry.surface.torus_root_solver as torus_root_solver
 
 from mcdc.constant import (
     COINCIDENCE_TOLERANCE,
@@ -199,7 +199,7 @@ def get_distance(particle_container, surface):
     coefficients[3] = a3 + 0.0j
     coefficients[4] = a4 + 0.0j
     roots = util.local_array(4, np.complex128)
-    root_solve.solve_quartic(coefficients, roots)
+    torus_root_solver.solve_quartic(coefficients, roots)
 
     min_t = INF
 

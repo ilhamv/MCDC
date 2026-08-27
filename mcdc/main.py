@@ -137,9 +137,9 @@ def prepare(simulationPy: Simulation):
     simulation = simulation_container[0]
 
     # Pick Python-version RNG if needed
-    import mcdc.transport.rng as rng
-
     if config.mode == "python":
+        import mcdc.transport.rng as rng
+
         rng.wrapping_add = rng.wrapping_add_python
         rng.wrapping_mul = rng.wrapping_mul_python
 
@@ -171,7 +171,7 @@ def prepare(simulationPy: Simulation):
     #     MPI.COMM_WORLD.Barrier()
 
     # ==================================================================================
-    # Setup GPU-Related Data Structures, if Necessary
+    # Setup GPU-Related Data Structures
     # ==================================================================================
 
     if config.target == "gpu":

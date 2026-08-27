@@ -35,6 +35,7 @@ def set_bank_size(bank, value):
 
 @njit
 def add_bank_size(bank, value):
+    # Perform atomic increment to the bank size; return the initial size
     return util.atomic_add(bank["size"], 0, value)
 
 
@@ -147,7 +148,7 @@ def promote_future_particles(program, data):
         if particle["t"] < next_census_time:
 
             bank_census_particle(particle_container, program)
-            j = add_bank_size(future_bank, -1)
+            j = add_bank_size(future_bank, -1) - 1
 
             # Consolidate the emptied space in the future bank
             particle_module.copy(

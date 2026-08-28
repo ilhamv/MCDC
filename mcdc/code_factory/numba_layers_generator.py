@@ -1228,19 +1228,20 @@ def _accessor_1d_last(
 
 
 def _accessor_chunk(object_name, attribute_name, setter=False):
-    text = f"@njit\n"
     if setter:
+        text = f"@njit\n"
         text += (
             f"def {attribute_name}_chunk(start, length, {object_name}, data, value):\n"
         )
     else:
+        text = f"@array_return(nb.types.float64)\n"
         text += f"def {attribute_name}_chunk(start, length, {object_name}, data):\n"
     text += f'    start += {object_name}["{attribute_name}_offset"]\n'
     text += f"    end = start + length\n"
     if setter:
         text += f"    data[start:end] = value\n\n\n"
     else:
-        text += f"    return data[start:end]\n\n\n"
+        text += f"    return array_result(data[start:end])\n\n\n"
     return text
 
 

@@ -24,7 +24,7 @@ def source_loop(seed, simulation, data):
     settings = simulation["settings"]
 
     full_work_size = simulation["mpi_work_size"]
-    
+
     if full_work_size == 0:
         return
 

@@ -369,7 +369,7 @@ def _check_cell(particle_container, speed, cell, simulation, data):
         return True
 
     # Create local value array
-    value = util.local_array(100, np.bool_)
+    value = util.local_array(literals.rpn_evaluation_buffer_size(), np.bool_)
     N_value = 0
 
     # March forward through RPN tokens

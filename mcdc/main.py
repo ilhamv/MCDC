@@ -171,15 +171,6 @@ def prepare(simulationPy: Simulation):
     #     MPI.COMM_WORLD.Barrier()
 
     # ==================================================================================
-    # Setup GPU-Related Data Structures
-    # ==================================================================================
-
-    if config.target == "gpu":
-        from mcdc.code_factory.gpu.program_builder import setup_gpu_program
-
-        setup_gpu_program(simulation_container, data)
-
-    # ==================================================================================
     # Finalize
     # ==================================================================================
 

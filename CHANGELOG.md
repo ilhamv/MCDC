@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 
 ### Changed
 
+- Update GPU transport support for the current MC/DC data model and Harmonize runtime, including GPU-compatible state access, particle-bank operations, array accessors, and torus intersections, from [@braxtoncuneo].
 - Show previously published documentation versions in the documentation version switcher, from [@ilhamv]
 
 ### Deprecated
@@ -204,3 +205,4 @@ The pre-refactor implementation remains available in the `cement` branch as a re
 [@gunnarrl]: https://github.com/gunnarrl
 [@Talen-Ayers]: https://github.com/Talen-Ayers
 [@steps-re]: https://github.com/steps-re
+[@braxtoncuneo]: https://github.com/braxtoncuneo

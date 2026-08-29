@@ -1,4 +1,5 @@
 from mcdc.object_.simulation import Simulation
+import mcdc.config as config
 
 # ======================================================================================
 # Run Simulation
@@ -136,10 +137,9 @@ def prepare(simulationPy: Simulation):
     simulation = simulation_container[0]
 
     # Pick Python-version RNG if needed
-    import mcdc.config as config
-    import mcdc.transport.rng as rng
-
     if config.mode == "python":
+        import mcdc.transport.rng as rng
+
         rng.wrapping_add = rng.wrapping_add_python
         rng.wrapping_mul = rng.wrapping_mul_python
 
@@ -183,8 +183,6 @@ def prepare(simulationPy: Simulation):
 
 
 def finalize(simulation):
-    import mcdc.config as config
-
     # GPU teardowns if needed
     if config.target == "gpu":
         from mcdc.code_factory.gpu.program_builder import teardown_gpu_program

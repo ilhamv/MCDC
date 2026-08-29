@@ -108,12 +108,7 @@ def source_particle(particle_container, seed, simulation, data):
     # Motion translation
     if source["moving"]:
         # Get moving interval index wrt the given time
-        time_grid = data[
-            source["move_time_grid_offset"] : (
-                source["move_time_grid_offset"] + source["N_move_grid"]
-            )
-        ]
-        # Above is equivalent to: time_grid = mcdc_get.source.move_time_grid_all(source, data)
+        time_grid = mcdc_get.source.move_time_grid_all(source, data)
 
         tolerance = COINCIDENCE_TOLERANCE_TIME
         go_lower = False
@@ -124,14 +119,10 @@ def source_particle(particle_container, seed, simulation, data):
             idx += 1
 
         # Source move translations
-        start = source["move_translations_offset"] + idx * 3
-        trans_0 = data[start : start + 3]
-        # Above is equivalent to: trans_0 = mcdc_get.source.move_translations_vector(idx, source, data)
+        trans_0 = mcdc_get.source.move_translations_vector(idx, source, data)
 
         # Source move velocities
-        start = source["move_velocities_offset"] + idx * 3
-        V = data[start : start + 3]
-        # Above is equivalent to: V = mcdc_get.source.move_velocities_vector(idx, source, data)
+        V = mcdc_get.source.move_velocities_vector(idx, source, data)
 
         # Source move time grid
         time_0 = mcdc_get.source.move_time_grid(idx, source, data)

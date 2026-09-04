@@ -158,9 +158,10 @@ def forward_declare_gpu_program(simulation_dtype):
     from mcdc.transport import util
 
     if config.ROCM_AVAILABLE:
-        access_target="hip"
+        access_target = "hip"
     else:
-        access_target="gpu"
+        access_target = "gpu"
+
     @nb.extending.overload(util.access_simulation, target=access_target)
     def access_simulation_gpu_overload(program):
         def impl(program):

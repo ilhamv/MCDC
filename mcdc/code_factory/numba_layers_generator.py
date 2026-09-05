@@ -351,7 +351,7 @@ def generate_numba_layers(simulation):
     # ==================================================================================
 
     if config.target == "gpu":
-        gpu_builder.prepare_gpu_program(simulation_dtype, data["size"])
+        gpu_builder.prepare_gpu_program(simulation_dtype, int(data["size"]))
 
     # ==================================================================================
     # Allocate the flattened data and re-set the objects

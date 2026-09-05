@@ -14,7 +14,7 @@ from mcdc.transport.simulation import source_closeout
 caching = config.caching
 
 
-@njit(cache=caching)
+@njit(cache=False)
 def source_loop(seed, simulation, data):
     # For async execution
     iter_count = 655360000

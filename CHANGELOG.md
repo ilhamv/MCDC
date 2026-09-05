@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 ### Deprecated
 
 ### Removed
+- Caching of the `souce_loop` function is removed for GPU execution, from [@braxtoncuneo].
 
 ### Fixed
 

@@ -43,10 +43,12 @@ def _reduce(tally, simulation, data):
         data[start + i] /= N_particle
 
     # MPI Reduce
-    buff = np.zeros(N)
+    master = simulation["mpi_master"]
     with objmode():
-        MPI.COMM_WORLD.Reduce(data[start:end], buff, MPI.SUM, 0)
-    data[start:end] = buff
+        if master:
+            MPI.COMM_WORLD.Reduce(MPI.IN_PLACE, data[start:end], MPI.SUM, 0)
+        else:
+            MPI.COMM_WORLD.Reduce(data[start:end], None, MPI.SUM, 0)
 
 
 # ======================================================================================
@@ -56,8 +58,20 @@ def _reduce(tally, simulation, data):
 
 @njit
 def accumulate(simulation, data):
+    settings = simulation["settings"]
+    local_moments = (
+        not settings["neutron_eigenvalue_mode"]
+        and settings["N_batch"] == 1
+        and not settings["use_census_based_tally"]
+    )
     for tally in simulation["tallies"]:
-        _accumulate(tally, data)
+        if simulation["mpi_master"] or local_moments:
+            _accumulate(tally, data)
+
+        # Reset score bin
+        start = tally["bin_offset"]
+        for i in range(tally["bin_length"]):
+            data[start + i] = 0.0
 
 
 @njit
@@ -67,7 +81,7 @@ def _accumulate(tally, data):
     offset_sum = tally["bin_sum_offset"]
     offset_sum_square = tally["bin_sum_square_offset"]
 
-    # Note: Three separate loops are employed to avoid cache miss due to potentially
+    # Note: Separate loops are employed to avoid cache miss due to potentially
     #       large N_bin
 
     # Sum of score
@@ -79,10 +93,6 @@ def _accumulate(tally, data):
     for i in range(N_bin):
         score = data[offset_bin + i]
         data[offset_sum_square + i] += score * score
-
-    # Reset score bin
-    for i in range(N_bin):
-        data[offset_bin + i] = 0.0
 
 
 # ======================================================================================
@@ -114,13 +124,20 @@ def _finalize(tally, simulation, data):
 
     else:
         # MPI Reduce
-        buff = np.zeros(N_bin)
-        buff_sq = np.zeros(N_bin)
+        master = simulation["mpi_master"]
         with objmode():
-            MPI.COMM_WORLD.Reduce(data[sum_start:sum_end], buff, MPI.SUM, 0)
-            MPI.COMM_WORLD.Reduce(data[sum_sq_start:sum_sq_end], buff_sq, MPI.SUM, 0)
-        data[sum_start:sum_end] = buff
-        data[sum_sq_start:sum_sq_end] = buff_sq
+            if master:
+                MPI.COMM_WORLD.Reduce(MPI.IN_PLACE, data[sum_start:sum_end], MPI.SUM, 0)
+                MPI.COMM_WORLD.Reduce(
+                    MPI.IN_PLACE, data[sum_sq_start:sum_sq_end], MPI.SUM, 0
+                )
+            else:
+                MPI.COMM_WORLD.Reduce(data[sum_start:sum_end], None, MPI.SUM, 0)
+                MPI.COMM_WORLD.Reduce(data[sum_sq_start:sum_sq_end], None, MPI.SUM, 0)
+
+    # All ranks must finish any reductions before workers can return.
+    if not simulation["mpi_master"]:
+        return
 
     # Calculate and store statistics
     #   sum --> mean

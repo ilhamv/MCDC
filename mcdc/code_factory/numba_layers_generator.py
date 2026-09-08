@@ -1435,6 +1435,8 @@ def decode_structure_item(item, prefix=""):
     if type(item[1]) != np.dtypes.VoidDType:
         if isinstance(item[1], str):
             dtype = f"'{item[1]}'"
+        elif item[1] is np.bool_:
+            dtype = "bool_"
         else:
             dtype = item[1].__name__
         if len(item) == 3:

@@ -1047,6 +1047,8 @@ def validate_accessor_targets(targets):
 
 def generate_mcdc_access(targets):
     validate_accessor_targets(targets)
+    # Skip empty attribute lists to avoid generating empty accessor modules and imports.
+    targets = {name: attributes for name, attributes in targets.items() if attributes}
 
     for object_name in targets.keys():
         path = f"{Path(mcdc.__file__).parent}"

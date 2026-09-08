@@ -1436,6 +1436,7 @@ def decode_structure_item(item, prefix=""):
         if isinstance(item[1], str):
             dtype = f"'{item[1]}'"
         elif item[1] is np.bool_:
+            # Needed since per NumPy 2.4.6, np.bool_.__name__ returns "bool"
             dtype = "bool_"
         else:
             dtype = item[1].__name__

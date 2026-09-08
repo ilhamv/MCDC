@@ -15,13 +15,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 
 ### Changed
 
+- Filter out empty numba support accessors from creation, from [@ilhamv]
 - Update GPU transport support for the current MC/DC data model and Harmonize runtime, including GPU-compatible state access, particle-bank operations, array accessors, and torus intersections, from [@braxtoncuneo].
 - Show previously published documentation versions in the documentation version switcher, from [@ilhamv]
 
 ### Deprecated
 
 ### Removed
+
 - Caching of the `souce_loop` function is removed for GPU execution, from [@braxtoncuneo].
+- Remove empty mcdc_get and mcdc_set members, from [@ilhamv]
 
 ### Fixed
 

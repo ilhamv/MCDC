@@ -87,7 +87,7 @@ def run_simulation(simulationPy: Simulation):
     output_module.generate_output(simulation, data, simulationPy, no_tally_output)
 
     # Combine per-batch, per-census tally files into the main output
-    if no_tally_output and settings.use_census_based_tally:
+    if not no_tally_output and settings.use_census_based_tally:
         output_module.recombine_tallies(simulationPy, simulation)
 
     # TIMER: output

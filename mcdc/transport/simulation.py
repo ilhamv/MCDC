@@ -108,6 +108,8 @@ def fixed_source_simulation(simulation_container, data):
     # Tally closeout
     if not use_census_based_tally:
         tally_module.closeout.finalize(simulation, data)
+    else:
+        tally_module.closeout.finalize_census(simulation, data)
 
 
 def eigenvalue_simulation(simulation_container, data):

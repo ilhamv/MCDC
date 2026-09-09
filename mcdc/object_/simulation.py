@@ -189,6 +189,9 @@ class Simulation(MCDCBase):
     runtime_output: float
     runtime_bank_management: float
 
+    # Performance metrics
+    effective_variance: float
+
     # GPU metadata
     gpu_meta: GPUMeta
     source_seed: int
@@ -272,6 +275,9 @@ class Simulation(MCDCBase):
         self.runtime_simulation = 0.0
         self.runtime_output = 0.0
         self.runtime_bank_management = 0.0
+
+        # Performance metrics
+        self.effective_variance = 0.0
 
         # GPU metadata
         self.gpu_meta = GPUMeta()

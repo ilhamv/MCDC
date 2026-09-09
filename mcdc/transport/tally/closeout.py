@@ -7,6 +7,7 @@ from mpi4py import MPI
 ####
 
 import mcdc.mcdc_set as mcdc_set
+import mcdc.output as output_module
 import mcdc.transport.particle_bank as particle_bank_module
 
 from mcdc.constant import (
@@ -102,8 +103,57 @@ def _accumulate(tally, data):
 
 @njit
 def finalize(simulation, data):
+    relative_variance = 0.0
+    nonzero_bins = 0
+
     for tally in simulation["tallies"]:
-        _finalize(tally, simulation, data)
+        subtotal, count = _finalize(tally, simulation, data)
+        relative_variance += subtotal
+        nonzero_bins += count
+
+    if nonzero_bins == 0:
+        simulation["effective_variance"] = np.nan
+    else:
+        simulation["effective_variance"] = relative_variance / nonzero_bins
+
+
+@njit
+def finalize_census(simulation, data):
+    """Combine census batches and store effective variance before leaving transport."""
+    simulation["effective_variance"] = np.nan
+    N_batch = simulation["settings"]["N_batch"]
+    if not simulation["mpi_master"] or N_batch < 2:
+        return
+
+    relative_variance = 0.0
+    nonzero_bins = 0
+    for tally in simulation["tallies"]:
+        for score in range(tally["scores_length"]):
+            for census in range(simulation["settings"]["N_census"] - 1):
+                N_bin = tally["bin_length"] // tally["scores_length"]
+                mean = np.zeros(N_bin)
+                second_moment = np.zeros(N_bin)
+                for batch in range(N_batch):
+                    # Only HDF5 I/O requires Python; all statistics stay compiled.
+                    with objmode(values="float64[:]"):
+                        values = output_module.read_census_score(
+                            simulation, data, tally, score, batch, census
+                        )
+                    for i in range(N_bin):
+                        mean[i] += values[i]
+                        second_moment[i] += values[i] * values[i]
+                for i in range(N_bin):
+                    mean[i] /= N_batch
+                    if mean[i] != 0.0:
+                        variance = max(
+                            (second_moment[i] / N_batch - mean[i] * mean[i])
+                            / (N_batch - 1),
+                            0.0,
+                        )
+                        relative_variance += variance / (mean[i] * mean[i])
+                        nonzero_bins += 1
+    if nonzero_bins > 0:
+        simulation["effective_variance"] = relative_variance / nonzero_bins
 
 
 @njit
@@ -145,6 +195,9 @@ def _finalize(tally, simulation, data):
     N_bin = tally["bin_length"]
     offset_sum = tally["bin_sum_offset"]
     offset_sum_square = tally["bin_sum_square_offset"]
+    relative_variance = 0.0
+    nonzero_bins = 0
+
     for i in range(N_bin):
         data[offset_sum + i] = data[offset_sum + i] / N_history
         radicand = (
@@ -156,6 +209,15 @@ def _finalize(tally, simulation, data):
             data[offset_sum_square + i] = 0.0
         else:
             data[offset_sum_square + i] = math.sqrt(radicand)
+
+        # Accumulate squared relative errors while finalized statistics are available.
+        mean = data[offset_sum + i]
+        if mean != 0.0:
+            relative_error = data[offset_sum_square + i] / mean
+            relative_variance += relative_error * relative_error
+            nonzero_bins += 1
+
+    return relative_variance, nonzero_bins
 
 
 # ======================================================================================

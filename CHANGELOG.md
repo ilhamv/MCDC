@@ -8,12 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 
 ### Added
 
+- Add CI check requiring generated Numba support to match the rebuild script, from [@ilhamv]
 - Add piece-wise linear spatial distribution for source definition, from [@ilhamv]
 - Add overriding option N_active, from [@ilhamv]
 - Add MC/DC-VVP project documentation with verification case narratives, published results, and VVP result-generation and publication steps in the release checklist, from [@ilhamv]
 
 ### Changed
 
+- Filter out empty numba support accessors from creation, from [@ilhamv]
 - Update GPU transport support for the current MC/DC data model and Harmonize runtime, including GPU-compatible state access, particle-bank operations, array accessors, and torus intersections, from [@braxtoncuneo].
 - Show previously published documentation versions in the documentation version switcher, from [@ilhamv]
 - Optimize tally moments memory allocation — only allocate to non-master rank if necessary, from [@ilhamv]
@@ -21,7 +23,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 ### Deprecated
 
 ### Removed
+
 - Caching of the `souce_loop` function is removed for GPU execution, from [@braxtoncuneo].
+- Remove empty mcdc_get and mcdc_set members, from [@ilhamv]
 
 ### Fixed
 

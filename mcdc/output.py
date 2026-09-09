@@ -19,7 +19,7 @@ from mcdc.constant import (
 # ======================================================================================
 
 
-def generate_output(mcdc, data, simulationPy):
+def generate_output(mcdc, data, simulationPy, no_tally_output=False):
     if not mcdc["mpi_master"]:
         return
 
@@ -45,10 +45,11 @@ def generate_output(mcdc, data, simulationPy):
         return
 
     # Tallies
-    create_tally_dataset(file, mcdc, data)
+    if not no_tally_output:
+        create_tally_dataset(file, mcdc, data)
 
     # Eigenvalues
-    if mcdc["settings"]["neutron_eigenvalue_mode"]:
+    if not no_tally_output and mcdc["settings"]["neutron_eigenvalue_mode"]:
         N_cycle = mcdc["settings"]["N_cycle"]
         file.create_dataset(
             "k_cycle", data=mcdc_get.simulation.k_cycle_chunk(0, N_cycle, mcdc, data)
@@ -107,7 +108,6 @@ def create_object_dataset(file, group_name, object_):
 
 def create_runtime_datasets(mcdc):
     import h5py
-    import mcdc.config as config
 
     if not mcdc["mpi_master"]:
         return
@@ -117,11 +117,6 @@ def create_runtime_datasets(mcdc):
     main_output = h5py.File(f"{base_name}.h5", "a")
     create_runtime_dataset(main_output, mcdc)
     main_output.close()
-
-    if config.args.runtime_output:
-        runtime_output = h5py.File(f"{base_name}.h5", "w")
-        create_runtime_dataset(runtime_output, mcdc)
-        runtime_output.close()
 
 
 def create_runtime_dataset(file, mcdc):
@@ -133,6 +128,50 @@ def create_runtime_dataset(file, mcdc):
         "bank_management",
     ]:
         file.create_dataset(f"runtime/{name}", data=np.array([mcdc["runtime_" + name]]))
+
+
+def generate_performance_output(simulation):
+    """Append performance metrics to the standard output on the master rank."""
+
+    if not simulation["mpi_master"]:
+        return
+
+    settings = simulation["settings"]
+
+    # Include inactive eigenvalue cycles in the total transport workload.
+    N_repeat = (
+        settings["N_cycle"]
+        if settings["neutron_eigenvalue_mode"]
+        else settings["N_batch"]
+    )
+
+    N_history = int(settings["N_particle"]) * int(N_repeat)
+
+    with h5py.File(f"{settings['output_name']}.h5", "a") as file:
+        group = file.create_group("performance")
+        group.create_dataset("runtime", data=simulation["runtime_total"])
+        group.create_dataset("N_history", data=N_history)
+        group.create_dataset("N_rank", data=simulation["mpi_size"])
+        group.create_dataset(
+            "effective_variance", data=simulation["effective_variance"]
+        )
+
+
+def read_census_score(simulation, data, tally, score, batch, census):
+    """Read one flattened census score; absent batch contributions are zero."""
+    from mcdc.object_.tally import decode_score_type
+
+    path = census_based_tally_file_name(
+        simulation["settings"]["output_name"], batch, census
+    )
+    if not path.is_file():
+        return np.zeros(tally["bin_length"] // tally["scores_length"])
+    score_type = mcdc_get.tally.scores(score, tally, data)
+    score_name = decode_score_type(score_type, lower_case=True)
+    with h5py.File(path, "r") as file:
+        return np.asarray(
+            file[f"tallies/{tally['name']}/{score_name}/mean"][()], dtype=np.float64
+        ).reshape(-1)
 
 
 # ======================================================================================

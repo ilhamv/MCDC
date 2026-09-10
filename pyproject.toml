@@ -60,17 +60,22 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+dev = [
+  "black<27",
+  "pre-commit<5",
+  "pyright<1.2",
+  "pytest<10",
+]
+
 docs = [
   "sphinx>=8,<10",
   "pydata-sphinx-theme>=0.20,<0.21",
   "sphinx-design>=0.6,<0.8",
 ]
 
-dev = [
-  "black<27",
-  "pre-commit<5",
-  "pyright<1.2",
-  "pytest<10",
+vvp = [
+  "maestrowf",
+  "ply",
 ]
 
 [project.urls]

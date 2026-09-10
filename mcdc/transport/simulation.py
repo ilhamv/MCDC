@@ -81,7 +81,7 @@ def fixed_source_simulation(simulation_container, data):
                 if simulation["mpi_master"]:
                     with objmode():
                         output_module.generate_census_based_tally(simulation, data)
-                tally_module.closeout.reset_sum_bins(simulation, data)
+                    tally_module.closeout.reset_sum_bins(simulation, data)
 
             # Terminate census loop if all banks are empty
             if (

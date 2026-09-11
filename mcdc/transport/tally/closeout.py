@@ -124,54 +124,67 @@ def finalize(simulation, data):
 
 @njit
 def finalize_census(simulation, data):
-    """Combine census batches and store effective variance."""
-    simulation["effective_variance"] = np.nan
-
-    # Census tallies use batches as independent samples.
-    N_sample = simulation["settings"]["N_batch"]
-    if not simulation["mpi_master"] or N_sample < 2:
-        return
-
+    """Finalize all census tally statistics and store their combined effective variance."""
     relative_variance = 0.0
     nonzero_bins = 0
 
     for tally in simulation["tallies"]:
-        for score in range(tally["scores_length"]):
-            for census in range(simulation["settings"]["N_census"] - 1):
-                # The sum and the sum of squares
-                N_bin = tally["bin_length"] // tally["scores_length"]
-                sum_ = np.zeros(N_bin)
-                sum_sq = np.zeros(N_bin)
-                for batch in range(N_sample):
-                    with objmode(values="float64[:]"):
-                        values = output_module.read_census_score(
-                            simulation, data, tally, score, batch, census
-                        )
-                    for i in range(N_bin):
-                        sum_[i] += values[i]
-                        sum_sq[i] += values[i] * values[i]
+        subtotal, count = _finalize_census(tally, simulation, data)
+        relative_variance += subtotal
+        nonzero_bins += count
 
-                # Calculate and store statistics
-                for i in range(N_bin):
-                    # Convert sum into mean
-                    sum_[i] = sum_[i] / N_sample
-
-                    # Convert sum of squares into standard error
-                    radicand = (sum_sq[i] - N_sample * sum_[i] ** 2) / (N_sample - 1)
-                    radicand = radicand / N_sample
-
-                    # Clamp negative variance caused by round-off error.
-                    radicand = max(radicand, 0.0)
-                    sum_sq[i] = math.sqrt(radicand)
-
-                    # Accumulate squared relative errors for nonzero means.
-                    if sum_[i] != 0.0:
-                        relative_error = sum_sq[i] / sum_[i]
-                        relative_variance += relative_error * relative_error
-                        nonzero_bins += 1
-
-    if nonzero_bins > 0:
+    if nonzero_bins == 0:
+        simulation["effective_variance"] = np.nan
+    else:
         simulation["effective_variance"] = relative_variance / nonzero_bins
+
+
+@njit
+def _finalize_census(tally, simulation, data):
+    """Finalize one census tally's statistics and return its relative-variance sum and count."""
+    # Census tallies use batches as independent samples.
+    N_sample = simulation["settings"]["N_batch"]
+    if not simulation["mpi_master"] or N_sample < 2:
+        return 0.0, 0
+
+    relative_variance = 0.0
+    nonzero_bins = 0
+
+    for score in range(tally["scores_length"]):
+        for census in range(simulation["settings"]["N_census"] - 1):
+            # The sum and the sum of squares
+            N_bin = tally["bin_length"] // tally["scores_length"]
+            sum_ = np.zeros(N_bin)
+            sum_sq = np.zeros(N_bin)
+            for batch in range(N_sample):
+                with objmode(values="float64[:]"):
+                    values = output_module.read_census_score(
+                        simulation, data, tally, score, batch, census
+                    )
+                for i in range(N_bin):
+                    sum_[i] += values[i]
+                    sum_sq[i] += values[i] * values[i]
+
+            # Calculate and store statistics
+            for i in range(N_bin):
+                # Convert sum into mean
+                sum_[i] = sum_[i] / N_sample
+
+                # Convert sum of squares into standard error
+                radicand = (sum_sq[i] - N_sample * sum_[i] ** 2) / (N_sample - 1)
+                radicand = radicand / N_sample
+
+                # Clamp negative variance caused by round-off error.
+                radicand = max(radicand, 0.0)
+                sum_sq[i] = math.sqrt(radicand)
+
+                # Accumulate squared relative errors for nonzero means.
+                if sum_[i] != 0.0:
+                    relative_error = sum_sq[i] / sum_[i]
+                    relative_variance += relative_error * relative_error
+                    nonzero_bins += 1
+
+    return relative_variance, nonzero_bins
 
 
 @njit

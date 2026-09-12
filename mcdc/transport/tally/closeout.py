@@ -20,7 +20,6 @@ from mcdc.constant import (
     GYRATION_RADIUS_ONLY_Y,
     GYRATION_RADIUS_ONLY_Z,
 )
-from mcdc.print_ import print_structure
 
 # ======================================================================================
 # Tally score preparation
@@ -88,6 +87,8 @@ def _reset_scores(tally, data):
 @njit
 def accumulate_statistics_and_reset_scores(simulation, data):
     """Accumulate sample statistics and reset scores on a rank owning moments."""
+    # Batch/cycle samples: only the master updates moments after score reduction.
+    # History samples: each rank updates its own moments after each source history.
     # Update sample counter
     simulation["N_tally_sample"] += 1
     N_sample = simulation["N_tally_sample"]
@@ -141,6 +142,8 @@ def _finalize(tally, simulation, data):
 
     N_sample = simulation["N_tally_sample"]
 
+    # Only history-based statistics need rank-local moments merged at finalization.
+    # Batch/cycle moments are already accumulated on the master rank.
     if simulation["history_based_statistics"]:
         N_sample = _reduce_moments(mean, sum_squared_deviations, N_sample, simulation)
 
@@ -222,7 +225,7 @@ def _reset_statistics(tally, data):
 
 
 # ======================================================================================
-# Statistical calculations
+# Shared statistical calculations (history, batch, and cycle samples)
 # ======================================================================================
 
 
@@ -233,34 +236,6 @@ def _update_moments(values, mean, sum_squared_deviations, N_sample):
         delta = values[i] - mean[i]
         mean[i] += delta / N_sample
         sum_squared_deviations[i] += delta * (values[i] - mean[i])
-
-
-@njit
-def _merge_moments(
-    mean,
-    sum_squared_deviations,
-    N_sample,
-    other_mean,
-    other_sum_squared_deviations,
-    N_other,
-):
-    """Merge independent sample groups using their counts and centered moments."""
-    if N_other == 0:
-        return N_sample
-    if N_sample == 0:
-        mean[:] = other_mean
-        sum_squared_deviations[:] = other_sum_squared_deviations
-        return N_other
-
-    N_total = N_sample + N_other
-    fraction = N_other / N_total
-    for i in range(len(mean)):
-        delta = other_mean[i] - mean[i]
-        mean[i] += delta * fraction
-        sum_squared_deviations[i] += other_sum_squared_deviations[i] + delta * delta * (
-            N_sample * fraction
-        )
-    return N_total
 
 
 @njit
@@ -291,13 +266,17 @@ def _finalize_statistics(mean, sum_squared_deviations, N_sample):
 
 
 # ======================================================================================
-# Parallel statistics reduction
+# History-based statistics only: parallel moment merging
 # ======================================================================================
+# Single-batch fixed-source CPU runs accumulate moments independently on each rank.
+# These helpers merge those moments at finalization; batch/cycle statistics do not
+# use this path because their scores are reduced before the master updates moments.
+# Time-census and GPU fixed-source runs require batch-based statistics.
 
 
 @njit
 def _reduce_moments(mean, sum_squared_deviations, N_sample, simulation):
-    """Merge rank-local statistics to rank zero through a binary reduction tree."""
+    """Merge rank-local history statistics to rank zero through a binary tree."""
     rank = simulation["mpi_rank"]
     size = simulation["mpi_size"]
     if size == 1:
@@ -313,12 +292,11 @@ def _reduce_moments(mean, sum_squared_deviations, N_sample, simulation):
         if rank % (2 * stride) == 0:
             source = rank + stride
             if source < size:
-                with objmode():
-                    MPI.COMM_WORLD.Recv(count, source=source, tag=0)
-                    MPI.COMM_WORLD.Recv(other_mean, source=source, tag=1)
-                    MPI.COMM_WORLD.Recv(
-                        other_sum_squared_deviations, source=source, tag=2
-                    )
+                # Isolate object-mode MPI calls from the tree's branches to avoid
+                # Numba lowering errors.
+                _receive_moments(
+                    count, other_mean, other_sum_squared_deviations, source
+                )
                 N_sample = _merge_moments(
                     mean,
                     sum_squared_deviations,
@@ -330,13 +308,59 @@ def _reduce_moments(mean, sum_squared_deviations, N_sample, simulation):
         else:
             destination = rank - stride
             count[0] = N_sample
-            with objmode():
-                MPI.COMM_WORLD.Send(count, dest=destination, tag=0)
-                MPI.COMM_WORLD.Send(mean, dest=destination, tag=1)
-                MPI.COMM_WORLD.Send(sum_squared_deviations, dest=destination, tag=2)
+
+            # Isolate object-mode MPI calls from the tree's branches to avoid
+            # Numba lowering errors.
+            _send_moments(count, mean, sum_squared_deviations, destination)
             break
         stride *= 2
     return N_sample
+
+
+@njit
+def _merge_moments(
+    mean,
+    sum_squared_deviations,
+    N_sample,
+    other_mean,
+    other_sum_squared_deviations,
+    N_other,
+):
+    """Merge two history-sample groups using their counts and centered moments."""
+    if N_other == 0:
+        return N_sample
+    if N_sample == 0:
+        mean[:] = other_mean
+        sum_squared_deviations[:] = other_sum_squared_deviations
+        return N_other
+
+    N_total = N_sample + N_other
+    fraction = N_other / N_total
+    for i in range(len(mean)):
+        delta = other_mean[i] - mean[i]
+        mean[i] += delta * fraction
+        sum_squared_deviations[i] += other_sum_squared_deviations[i] + delta * delta * (
+            N_sample * fraction
+        )
+    return N_total
+
+
+@njit
+def _receive_moments(count, mean, sum_squared_deviations, source):
+    """Receive a rank's history count, mean, and sum of squared deviations."""
+    with objmode():
+        MPI.COMM_WORLD.Recv(count, source=source, tag=0)
+        MPI.COMM_WORLD.Recv(mean, source=source, tag=1)
+        MPI.COMM_WORLD.Recv(sum_squared_deviations, source=source, tag=2)
+
+
+@njit
+def _send_moments(count, mean, sum_squared_deviations, destination):
+    """Send a rank's history count, mean, and sum of squared deviations."""
+    with objmode():
+        MPI.COMM_WORLD.Send(count, dest=destination, tag=0)
+        MPI.COMM_WORLD.Send(mean, dest=destination, tag=1)
+        MPI.COMM_WORLD.Send(sum_squared_deviations, dest=destination, tag=2)
 
 
 # ======================================================================================

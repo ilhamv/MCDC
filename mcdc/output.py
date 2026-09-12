@@ -237,8 +237,8 @@ def create_tally_dataset(file, mcdc, data):
 
         # Get and reshape tally
         N_bin = tally["bin_length"]
-        start_mean = tally["bin_sum_offset"]
-        start_sdev = tally["bin_sum_square_offset"]
+        start_mean = tally["bin_mean_offset"]
+        start_sdev = tally["bin_sum_squared_deviations_offset"]
         mean = data[start_mean : start_mean + N_bin]
         sdev = data[start_sdev : start_sdev + N_bin]
         shape = tuple([int(x) for x in mcdc_get.tally.bin_shape_all(tally, data)])
@@ -357,7 +357,7 @@ def recombine_tallies(simulationPy, simulation):
             for score in tally.scores:
                 score_name = f"tallies/{tally.name}/{decode_score_type(score, True)}"
                 mean = np.zeros(combined_shape)
-                second_moment = np.zeros(combined_shape)
+                sum_squared_deviations = np.zeros(combined_shape)
 
                 for i_census in range(N_census - 1):
                     offset = i_census * frequency
@@ -372,21 +372,24 @@ def recombine_tallies(simulationPy, simulation):
 
                         # Empty particle banks end a batch before later census files are
                         # written. Those absent contributions are physically zero.
-                        if not file_name.is_file():
-                            continue
+                        if file_name.is_file():
+                            with h5py.File(file_name, "r") as file:
+                                score_data = np.asarray(
+                                    file[f"{score_name}/mean"][()]
+                                ).reshape(census_shape)
+                        else:
+                            score_data = np.zeros(census_shape)
 
-                        with h5py.File(file_name, "r") as file:
-                            score_data = np.asarray(
-                                file[f"{score_name}/mean"][()]
-                            ).reshape(census_shape)
-                        mean[time_slice] += score_data
-                        second_moment[time_slice] += np.square(score_data)
+                        # Match the Welford update used in tally closeout.
+                        # Missing files must still participate as zero samples.
+                        delta = score_data - mean[time_slice]
+                        mean[time_slice] += delta / (i_batch + 1)
+                        sum_squared_deviations[time_slice] += delta * (
+                            score_data - mean[time_slice]
+                        )
 
-                mean /= N_batch
                 if N_batch > 1:
-                    variance = (second_moment / N_batch - np.square(mean)) / (
-                        N_batch - 1
-                    )
+                    variance = sum_squared_deviations / (N_batch - 1) / N_batch
                     sdev = np.sqrt(np.maximum(variance, 0.0))
                 else:
                     sdev = np.zeros_like(mean)

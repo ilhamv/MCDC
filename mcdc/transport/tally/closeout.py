@@ -22,7 +22,7 @@ from mcdc.constant import (
 from mcdc.print_ import print_structure
 
 # ======================================================================================
-# Reduce tally bins
+# Tally score preparation
 # ======================================================================================
 
 
@@ -54,55 +54,48 @@ def _reduce(tally, simulation, data):
             MPI.COMM_WORLD.Reduce(data[start:end], None, MPI.SUM, 0)
 
 
-# ======================================================================================
-# Accumulate tally bins
-# ======================================================================================
-
-
 @njit
-def accumulate(simulation, data):
-    """Accumulate sample moments and reset scores for all tallies."""
-    settings = simulation["settings"]
-    local_moments = (
-        not settings["neutron_eigenvalue_mode"]
-        and settings["N_batch"] == 1
-        and not settings["use_census_based_tally"]
-    )
+def reset_scores(simulation, data):
+    """Reset scores for all tallies."""
     for tally in simulation["tallies"]:
-        if simulation["mpi_master"] or local_moments:
-            _accumulate(tally, data)
-
-        # Reset score bin
-        start = tally["bin_offset"]
-        for i in range(tally["bin_length"]):
-            data[start + i] = 0.0
+        _reset_scores(tally, data)
 
 
 @njit
-def _accumulate(tally, data):
-    """Add one tally's scores to its sums and sums of squares."""
-    N_bin = tally["bin_length"]
-    offset_bin = tally["bin_offset"]
-    offset_sum = tally["bin_sum_offset"]
-    offset_sum_square = tally["bin_sum_square_offset"]
-
-    # Note: Separate loops are employed to avoid cache miss due to potentially
-    #       large N_bin
-
-    # Sum of score
-    for i in range(N_bin):
-        score = data[offset_bin + i]
-        data[offset_sum + i] += score
-
-    # Sum of score squared
-    for i in range(N_bin):
-        score = data[offset_bin + i]
-        data[offset_sum_square + i] += score * score
+def _reset_scores(tally, data):
+    """Reset scores of a tally."""
+    start = tally["bin_offset"]
+    for i in range(tally["bin_length"]):
+        data[start + i] = 0.0
 
 
 # ======================================================================================
-# Finalize
+# Tally statistics lifecycle
 # ======================================================================================
+
+
+@njit
+def accumulate_statistics_and_reset_scores(simulation, data):
+    """Accumulate sample statistics and reset scores on a rank owning moments."""
+    # Update sample counter
+    simulation["N_tally_sample"] += 1
+    N_sample = simulation["N_tally_sample"]
+
+    for tally in simulation["tallies"]:
+        # Update the running mean and sum of squared deviations.
+        N_bin = tally["bin_length"]
+        offset_bin = tally["bin_offset"]
+        offset_mean = tally["bin_mean_offset"]
+        offset_sum_squared_deviations = tally["bin_sum_squared_deviations_offset"]
+        values = data[offset_bin : offset_bin + N_bin]
+        mean = data[offset_mean : offset_mean + N_bin]
+        sum_squared_deviations = data[
+            offset_sum_squared_deviations : offset_sum_squared_deviations + N_bin
+        ]
+        _update_moments(values, mean, sum_squared_deviations, N_sample)
+
+        # Reset score bins
+        _reset_scores(tally, data)
 
 
 @njit
@@ -120,6 +113,31 @@ def finalize(simulation, data):
         simulation["effective_variance"] = np.nan
     else:
         simulation["effective_variance"] = relative_variance / nonzero_bins
+
+
+@njit
+def _finalize(tally, simulation, data):
+    """Finalize one tally's statistics and return its relative-variance sum and count."""
+    N_bin = tally["bin_length"]
+
+    # Reuse the buffers for the running mean and sum of squared deviations.
+    offset_mean = tally["bin_mean_offset"]
+    offset_sum_squared_deviations = tally["bin_sum_squared_deviations_offset"]
+    mean = data[offset_mean : offset_mean + N_bin]
+    sum_squared_deviations = data[
+        offset_sum_squared_deviations : offset_sum_squared_deviations + N_bin
+    ]
+
+    N_sample = simulation["N_tally_sample"]
+
+    if simulation["history_based_statistics"]:
+        N_sample = _reduce_moments(mean, sum_squared_deviations, N_sample, simulation)
+
+    # All ranks must finish any reductions before workers can return.
+    if not simulation["mpi_master"]:
+        return 0.0, 0
+
+    return _finalize_statistics(mean, sum_squared_deviations, N_sample)
 
 
 @njit
@@ -152,98 +170,109 @@ def _finalize_census(tally, simulation, data):
 
     for score in range(tally["scores_length"]):
         for census in range(simulation["settings"]["N_census"] - 1):
-            # The sum and the sum of squares
+            # The running mean and sum of squared deviations
             N_bin = tally["bin_length"] // tally["scores_length"]
-            sum_ = np.zeros(N_bin)
-            sum_sq = np.zeros(N_bin)
+            mean = np.zeros(N_bin)
+            sum_squared_deviations = np.zeros(N_bin)
             for batch in range(N_sample):
                 with objmode(values="float64[:]"):
                     values = output_module.read_census_score(
                         simulation, data, tally, score, batch, census
                     )
-                for i in range(N_bin):
-                    sum_[i] += values[i]
-                    sum_sq[i] += values[i] * values[i]
+                _update_moments(values, mean, sum_squared_deviations, batch + 1)
 
-            # Calculate and store statistics
-            for i in range(N_bin):
-                # Convert sum into mean
-                sum_[i] = sum_[i] / N_sample
-
-                # Convert sum of squares into standard error
-                radicand = (sum_sq[i] - N_sample * sum_[i] ** 2) / (N_sample - 1)
-                radicand = radicand / N_sample
-
-                # Clamp negative variance caused by round-off error.
-                radicand = max(radicand, 0.0)
-                sum_sq[i] = math.sqrt(radicand)
-
-                # Accumulate squared relative errors for nonzero means.
-                if sum_[i] != 0.0:
-                    relative_error = sum_sq[i] / sum_[i]
-                    relative_variance += relative_error * relative_error
-                    nonzero_bins += 1
+            subtotal, count = _finalize_statistics(
+                mean, sum_squared_deviations, N_sample
+            )
+            relative_variance += subtotal
+            nonzero_bins += count
 
     return relative_variance, nonzero_bins
 
 
 @njit
-def _finalize(tally, simulation, data):
-    """Finalize one tally's statistics and return its relative-variance sum and count."""
+def reset_statistics(simulation, data):
+    """Reset the sample count and accumulated statistics for all tallies."""
+    simulation["N_tally_sample"] = 0
+    for tally in simulation["tallies"]:
+        _reset_statistics(tally, data)
+
+
+@njit
+def _reset_statistics(tally, data):
+    """Reset one tally's mean and squared-deviation buffers."""
     N_bin = tally["bin_length"]
+    offset_mean = tally["bin_mean_offset"]
+    offset_sum_squared_deviations = tally["bin_sum_squared_deviations_offset"]
 
-    # The sum and the sum of squares
-    sum_offset = tally["bin_sum_offset"]
-    sum_end = sum_offset + N_bin
-    sum_ = data[sum_offset:sum_end]
-    sum_sq_offset = tally["bin_sum_square_offset"]
-    sum_sq_end = sum_sq_offset + N_bin
-    sum_sq = data[sum_sq_offset:sum_sq_end]
+    for i in range(N_bin):
+        data[offset_mean + i] = 0.0
+        data[offset_sum_squared_deviations + i] = 0.0
 
-    # Determine number of samples
-    N_batch = simulation["settings"]["N_batch"]
-    N_active = simulation["settings"]["N_active"]
-    N_particle = simulation["settings"]["N_particle"]
-    if simulation["settings"]["neutron_eigenvalue_mode"]:
-        N_sample = N_active
-    elif N_batch > 1:
-        N_sample = N_batch
-    else:
-        # History-based sampling
-        N_sample = N_particle
 
-        # MPI Reduce
-        with objmode():
-            if simulation["mpi_master"]:
-                MPI.COMM_WORLD.Reduce(MPI.IN_PLACE, sum_, MPI.SUM, 0)
-                MPI.COMM_WORLD.Reduce(MPI.IN_PLACE, sum_sq, MPI.SUM, 0)
-            else:
-                MPI.COMM_WORLD.Reduce(sum_, None, MPI.SUM, 0)
-                MPI.COMM_WORLD.Reduce(sum_sq, None, MPI.SUM, 0)
+# ======================================================================================
+# Statistical calculations
+# ======================================================================================
 
-    # All ranks must finish any reductions before workers can return.
-    if not simulation["mpi_master"]:
-        return 0.0, 0
 
-    # Calculate and store statistics
+@njit
+def _update_moments(values, mean, sum_squared_deviations, N_sample):
+    """Update the running mean and squared deviations using Welford's algorithm."""
+    for i in range(len(values)):
+        delta = values[i] - mean[i]
+        mean[i] += delta / N_sample
+        sum_squared_deviations[i] += delta * (values[i] - mean[i])
+
+
+@njit
+def _merge_moments(
+    mean,
+    sum_squared_deviations,
+    N_sample,
+    other_mean,
+    other_sum_squared_deviations,
+    N_other,
+):
+    """Merge independent sample groups using their counts and centered moments."""
+    if N_other == 0:
+        return N_sample
+    if N_sample == 0:
+        mean[:] = other_mean
+        sum_squared_deviations[:] = other_sum_squared_deviations
+        return N_other
+
+    N_total = N_sample + N_other
+    fraction = N_other / N_total
+    for i in range(len(mean)):
+        delta = other_mean[i] - mean[i]
+        mean[i] += delta * fraction
+        sum_squared_deviations[i] += other_sum_squared_deviations[i] + delta * delta * (
+            N_sample * fraction
+        )
+    return N_total
+
+
+@njit
+def _finalize_statistics(mean, sum_squared_deviations, N_sample):
+    """Store standard errors and return the relative-variance sum and bin count."""
     relative_variance = 0.0
     nonzero_bins = 0
 
-    for i in range(N_bin):
-        # Convert sum into mean
-        sum_[i] = sum_[i] / N_sample
-
-        # Convert sum of squares into standard error
-        radicand = (sum_sq[i] - N_sample * sum_[i] ** 2) / (N_sample - 1)
-        radicand = radicand / N_sample
+    for i in range(len(mean)):
+        if N_sample > 1:
+            # Convert squared deviations into standard error.
+            radicand = sum_squared_deviations[i] / (N_sample - 1)
+            radicand = radicand / N_sample
+        else:
+            radicand = 0.0
 
         # Clamp negative variance caused by round-off error.
         radicand = max(radicand, 0.0)
-        sum_sq[i] = math.sqrt(radicand)
+        sum_squared_deviations[i] = math.sqrt(radicand)
 
         # Accumulate squared relative errors for nonzero means.
-        if sum_[i] != 0.0:
-            relative_error = sum_sq[i] / sum_[i]
+        if mean[i] != 0.0:
+            relative_error = sum_squared_deviations[i] / mean[i]
             relative_variance += relative_error * relative_error
             nonzero_bins += 1
 
@@ -251,31 +280,56 @@ def _finalize(tally, simulation, data):
 
 
 # ======================================================================================
-# Reset sum bins
+# Parallel statistics reduction
 # ======================================================================================
 
 
 @njit
-def reset_sum_bins(simulation, data):
-    """Reset accumulated sample moments for all tallies."""
-    for tally in simulation["tallies"]:
-        _reset_sum_bins(tally, data)
+def _reduce_moments(mean, sum_squared_deviations, N_sample, simulation):
+    """Merge rank-local statistics to rank zero through a binary reduction tree."""
+    rank = simulation["mpi_rank"]
+    size = simulation["mpi_size"]
+    if size == 1:
+        return N_sample
 
-
-@njit
-def _reset_sum_bins(tally, data):
-    """Reset one tally's sums and sums of squares."""
-    N_bin = tally["bin_length"]
-    offset_sum = tally["bin_sum_offset"]
-    offset_sum_square = tally["bin_sum_square_offset"]
-
-    for i in range(N_bin):
-        data[offset_sum + i] = 0.0
-        data[offset_sum_square + i] = 0.0
+    count = np.zeros(1, dtype=np.int64)
+    # Reuse the receive buffers at each tree level; never gather all rank data.
+    N_receive = len(mean) if rank % 2 == 0 and rank + 1 < size else 0
+    other_mean = np.empty(N_receive)
+    other_sum_squared_deviations = np.empty(N_receive)
+    stride = 1
+    while stride < size:
+        if rank % (2 * stride) == 0:
+            source = rank + stride
+            if source < size:
+                with objmode():
+                    MPI.COMM_WORLD.Recv(count, source=source, tag=0)
+                    MPI.COMM_WORLD.Recv(other_mean, source=source, tag=1)
+                    MPI.COMM_WORLD.Recv(
+                        other_sum_squared_deviations, source=source, tag=2
+                    )
+                N_sample = _merge_moments(
+                    mean,
+                    sum_squared_deviations,
+                    N_sample,
+                    other_mean,
+                    other_sum_squared_deviations,
+                    count[0],
+                )
+        else:
+            destination = rank - stride
+            count[0] = N_sample
+            with objmode():
+                MPI.COMM_WORLD.Send(count, dest=destination, tag=0)
+                MPI.COMM_WORLD.Send(mean, dest=destination, tag=1)
+                MPI.COMM_WORLD.Send(sum_squared_deviations, dest=destination, tag=2)
+            break
+        stride *= 2
+    return N_sample
 
 
 # ======================================================================================
-# Eigenvalue
+# Eigenvalue statistics and diagnostics
 # ======================================================================================
 
 

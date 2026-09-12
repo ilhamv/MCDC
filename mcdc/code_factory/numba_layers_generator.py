@@ -23,7 +23,7 @@ from mcdc.object_.base import (
 )
 from mcdc.object_.particle import Particle, ParticleBank, ParticleData
 from mcdc.object_.tally import Tally
-from mcdc.object_.util import parse_dimension_expression
+from mcdc.object_.util import normalize_ndarray_hint, parse_dimension_expression
 from mcdc.print_ import print_error
 from mcdc.util import flatten
 
@@ -469,7 +469,7 @@ def set_structure(
     accessor_target = accessor_targets[label]
 
     for field in annotation:
-        hint = annotation[field]
+        hint = normalize_ndarray_hint(annotation[field])
         hint_origin = get_origin(hint)
         hint_args = get_args(hint)
         embedded_mcdc_base = is_embedded_mcdc_base(hint)
@@ -1012,6 +1012,7 @@ def parse_annotations_dict(ann: dict[str, str]) -> dict[str, object]:
 
 def decode_annotated_ndarray(hint):
     inner, metadata = get_args(hint)
+    inner = normalize_ndarray_hint(inner)
     inner_origin = get_origin(inner)
     inner_args = get_args(inner)
     shape_type, dtype_type = inner_args
@@ -1024,6 +1025,7 @@ def decode_annotated_ndarray(hint):
 
 
 def get_ndarray_dtype(hint):
+    hint = normalize_ndarray_hint(hint)
     hint_args = get_args(hint)
     if len(hint_args) < 2:
         return None

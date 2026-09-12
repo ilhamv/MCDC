@@ -6,6 +6,7 @@ from mpi4py import MPI
 
 ####
 
+import mcdc.config as config
 import mcdc.mcdc_set as mcdc_set
 import mcdc.output as output_module
 import mcdc.transport.particle_bank as particle_bank_module
@@ -45,13 +46,23 @@ def _reduce(tally, simulation, data):
     for i in range(N):
         data[start + i] /= N_particle
 
-    # MPI Reduce
+    # MPI reduce
     master = simulation["mpi_master"]
     with objmode():
-        if master:
-            MPI.COMM_WORLD.Reduce(MPI.IN_PLACE, data[start:end], MPI.SUM, 0)
+        if config.target == "gpu" and config.gpu_state_storage != "separate":
+            # Receive into host memory before updating GPU-backed data.
+            buff = np.zeros(N)
+            MPI.COMM_WORLD.Reduce(data[start:end], buff, MPI.SUM, 0)
+
+            if master:
+                data[start:end] = buff
+
         else:
-            MPI.COMM_WORLD.Reduce(data[start:end], None, MPI.SUM, 0)
+            # Host-backed data can be reduced in place without a receive buffer.
+            if master:
+                MPI.COMM_WORLD.Reduce(MPI.IN_PLACE, data[start:end], MPI.SUM, 0)
+            else:
+                MPI.COMM_WORLD.Reduce(data[start:end], None, MPI.SUM, 0)
 
 
 @njit

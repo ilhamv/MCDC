@@ -868,3 +868,4 @@ def make_simulation_type(N: dict):
         ('gpu_mode', bool_),
         ('source_seed', int64),
     ])
+
